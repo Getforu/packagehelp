@@ -1,0 +1,21 @@
+# RStudio files
+.Rproj.user/
+*.Rproj
+
+# R session files
+.RData
+.Rhistory
+.Ruserdata
+
+# Temporary files
+*~
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/*.tar.gz
+/*.zip
+
+# IDE files
+.vscode/
+.idea/
