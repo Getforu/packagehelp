@@ -1,4 +1,4 @@
-# Copyright (C) 2025 packhelp Team
+# Copyright (C) 2025 packagehelp Team
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,11 +21,11 @@ initialize_system_config <- function() {
   is_windows <- current_os == "Windows"
   is_mac <- current_os == "Darwin"
   is_linux <- current_os == "Linux"
-  
+
   if (is_windows) {
     system_paths <- list(
       option1 = "D:/R_packages",
-      option2 = "E:/R_library", 
+      option2 = "E:/R_library",
       option3 = "D:/Software/R_library"
     )
     path_examples <- "D:/R_packages 或 E:/Software/R_library"
@@ -64,7 +64,7 @@ initialize_system_config <- function() {
       nchar(path) >= 2 && (startsWith(path, "/") || startsWith(path, "~"))
     }
   }
-  
+
   return(list(
     current_os = current_os,
     is_windows = is_windows,
@@ -88,19 +88,19 @@ generate_environment_report <- function(sys_config) {
   sys_info <- Sys.info()
   r_version <- getRversion()
   total_packages <- length(installed.packages()[,1])
-  
+
   cat(sprintf("系统信息：%s %s\n", sys_info["sysname"], sys_info["release"]))
   cat(sprintf("当前 R 版本：R %s\n", r_version))
   cat(sprintf("当前已安装 R 包：%d 个\n", total_packages))
-  
+
   lib_paths <- .libPaths()
   cat("R包安装目录：\n")
   for (i in seq_along(lib_paths)) {
     cat(sprintf("  [%d] %s\n", i, lib_paths[i]))
   }
-  
+
   has_system_path <- any(grepl(sys_config$system_drive_pattern, lib_paths, ignore.case = TRUE))
-  
+
   cat("\n您现有的R包均安装在上述目录，如果出现多个，通常默认安装在第一个。\n")
   cat("\n接下来将协助您安装常用R包，请按照提示操作即可。\n\n")
   if (has_system_path) {
@@ -108,7 +108,7 @@ generate_environment_report <- function(sys_config) {
   } else {
     cat("如需修改包安装路径，请选择：\n\n")
   }
-  
+
   return(list(
     r_version = r_version,
     total_packages = total_packages,
@@ -124,13 +124,13 @@ generate_environment_report <- function(sys_config) {
 #' @keywords internal
 handle_library_path_configuration <- function(interactive, sys_config) {
   initial_lib_paths <- .libPaths()
-  
+
   if (interactive) {
     cat("A. 保持现有设置，安装在上述目录\n")
     cat(sprintf("B. 增加一个新的安装路径并设置为优先路径，以后R包都会安装到此路径（推荐，不影响现有包）\n\n"))
-    
+
     path_choice <- readline("请选择 (A/B): ")
-    
+
     if (toupper(path_choice) == "A") {
       cat("已选择保持现有设置。\n\n")
     } else if (toupper(path_choice) == "B") {
@@ -140,9 +140,9 @@ handle_library_path_configuration <- function(interactive, sys_config) {
       cat(sprintf("2. %s\n", sys_config$system_paths$option2))
       cat(sprintf("3. %s\n", sys_config$system_paths$option3))
       cat("4. 自定义路径\n\n")
-      
+
       path_option <- readline("请选择路径选项 (1-4): ")
-      
+
       new_path <- NULL
       if (path_option == "1") {
         new_path <- sys_config$system_paths$option1
@@ -153,16 +153,16 @@ handle_library_path_configuration <- function(interactive, sys_config) {
       } else if (path_option == "4") {
         cat("请输入您的自定义路径: ")
         new_path <- readline()
-        
+
         if (new_path == "" || is.null(new_path)) {
           cat("未输入路径，程序已退出。\n")
           return(list(status = "cancelled", reason = "empty_path"))
         }
-        
+
         if (startsWith(new_path, "~")) {
           new_path <- path.expand(new_path)
         }
-        
+
         if (!sys_config$validate_path(new_path)) {
           cat("输入的路径格式无效，程序已退出。\n")
           cat(sprintf("请输入完整路径，例如：%s\n", sys_config$path_examples))
@@ -172,14 +172,14 @@ handle_library_path_configuration <- function(interactive, sys_config) {
         cat("无效选择，程序已退出。\n")
         return(list(status = "cancelled", reason = "invalid_path_option"))
       }
-      
+
       if (new_path != "" && !is.null(new_path)) {
         if (startsWith(new_path, "~")) {
           new_path <- path.expand(new_path)
         }
-        
+
         new_path <- normalizePath(new_path, mustWork = FALSE)
-        
+
         if (!dir.exists(new_path)) {
           cat(sprintf("路径 %s 不存在，正在创建...\n", new_path))
           tryCatch({
@@ -191,7 +191,7 @@ handle_library_path_configuration <- function(interactive, sys_config) {
             return(list(status = "cancelled", reason = "path_creation_failed"))
           })
         }
-        
+
         if (!is.null(new_path) && dir.exists(new_path)) {
           .libPaths(c(new_path, .libPaths()))
           cat(sprintf("已将 %s 添加为优先安装路径。\n", new_path))
@@ -205,7 +205,7 @@ handle_library_path_configuration <- function(interactive, sys_config) {
       cat("无效选择，程序已退出。\n")
       return(list(status = "cancelled", reason = "invalid_choice"))
     }
-    
+
     updated_paths <- .libPaths()
     if (!identical(initial_lib_paths, updated_paths)) {
       cat("\n更新后的R包安装目录：\n")
@@ -217,7 +217,7 @@ handle_library_path_configuration <- function(interactive, sys_config) {
       cat("\n")
     }
   }
-  
+
   return(list(status = "success"))
 }
 
@@ -228,64 +228,64 @@ handle_library_path_configuration <- function(interactive, sys_config) {
 analyze_package_status <- function(package_defs) {
   r_version <- getRversion()
   version_ok <- compareVersion(as.character(r_version), package_defs$min_r_version) >= 0
-  
+
   base_missing <- c()
   for (pkg in package_defs$base_packages) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
       base_missing <- c(base_missing, pkg)
     }
   }
-  
+
   if (!version_ok) {
     cat(sprintf("警告：R版本过低 (当前: %s, 需要: %s+)\n", r_version, package_defs$min_r_version))
   }
-  
+
   if (length(base_missing) == 0) {
     cat("基础包：已全部安装\n")
   } else {
     cat(sprintf("基础包：缺失 %d 个\n", length(base_missing)))
   }
-  
+
   cat("\n常规包状态：\n")
-  
+
   installed_essential <- c()
   missing_essential <- c()
   outdated_essential <- c()
-  
+
   for (pkg_name in names(package_defs$essential_packages)) {
     recommended_version <- package_defs$essential_packages[[pkg_name]]
-    
+
     if (!requireNamespace(pkg_name, quietly = TRUE)) {
       missing_essential <- c(missing_essential, pkg_name)
     } else {
       current_version <- as.character(packageVersion(pkg_name))
       version_comparison <- compareVersion(current_version, recommended_version)
-      
+
       if (version_comparison < 0) {
         outdated_essential <- c(outdated_essential, pkg_name)
-        installed_essential <- c(installed_essential, pkg_name) 
+        installed_essential <- c(installed_essential, pkg_name)
       } else {
         installed_essential <- c(installed_essential, pkg_name)
       }
     }
   }
-  
+
   if (length(missing_essential) == 0 && length(outdated_essential) == 0) {
     cat("所有常规包已正确安装\n")
   } else {
     if (length(missing_essential) > 0) {
       cat(sprintf("缺少 %d 个包未安装\n", length(missing_essential)))
     }
-    
+
     if (length(outdated_essential) > 0) {
       cat(sprintf("有 %d 个包版本过低\n", length(outdated_essential)))
     }
   }
-  
+
   cat("-----------------------------------\n")
-  
+
   packages_to_install <- c(missing_essential, outdated_essential)
-  
+
   return(list(
     version_ok = version_ok,
     base_missing = base_missing,
@@ -306,7 +306,7 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
   packages_to_install <- pkg_analysis$packages_to_install
   missing_essential <- pkg_analysis$missing_essential
   outdated_essential <- pkg_analysis$outdated_essential
-  
+
   if (length(packages_to_install) > 0) {
     cat(sprintf("\n即将为您安装/更新 %d 个常规包\n", length(packages_to_install)))
     if (length(missing_essential) > 0) {
@@ -317,7 +317,7 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
     }
     cat("这些包是使用R语言进行科研的基础, 且占用较小, 建议继续安装\n")
     cat(sprintf("安装路径：%s\n\n", .libPaths()[1]))
-    
+
     if (interactive) {
       choice <- readline("是否继续安装/更新？(Y/yes), 输入其他任意内容退出本程序: ")
       if (tolower(choice) %in% c("y", "yes", "")) {
@@ -326,31 +326,31 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
         return(list(status = "cancelled"))
       }
     }
-    
+
     cat("=== 正在安装/更新常规包 ===\n")
     success_count <- 0
     failed_packages <- c()
-    
+
     for (i in seq_along(packages_to_install)) {
       pkg_name <- packages_to_install[i]
       recommended_version <- package_defs$essential_packages[[pkg_name]]
-      
+
       cat(sprintf("正在安装/更新第 %d 个包及其依赖，请不要操作，全部R包安装完成后会提示已完成...", i))
-      
+
       install_result <- tryCatch({
         if (requireNamespace("remotes", quietly = TRUE)) {
-          remotes::install_version(pkg_name, version = recommended_version, 
+          remotes::install_version(pkg_name, version = recommended_version,
                                  dependencies = TRUE, upgrade = "never", quiet = TRUE)
         } else {
           install.packages("remotes", quiet = TRUE)
           if (requireNamespace("remotes", quietly = TRUE)) {
-            remotes::install_version(pkg_name, version = recommended_version, 
+            remotes::install_version(pkg_name, version = recommended_version,
                                    dependencies = TRUE, upgrade = "never", quiet = TRUE)
           } else {
             install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
           }
         }
-        
+
         if (requireNamespace(pkg_name, quietly = TRUE)) {
           TRUE
         } else {
@@ -364,11 +364,11 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
           FALSE
         })
       })
-      
+
       if (install_result) {
         cat(" 完成\n")
         success_count <- success_count + 1
-        
+
         if (pkg_name %in% missing_essential) {
           missing_essential <- missing_essential[missing_essential != pkg_name]
         }
@@ -379,13 +379,13 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
         cat(" 失败\n")
         failed_packages <- c(failed_packages, pkg_name)
       }
-      
+
       progress <- round((i / length(packages_to_install)) * 100)
       progress_bar <- paste(rep("█", floor(progress/5)), collapse = "")
       progress_empty <- paste(rep("░", 20 - floor(progress/5)), collapse = "")
       cat(sprintf("总进度: %s%s %d%%\n", progress_bar, progress_empty, progress))
     }
-    
+
     cat(sprintf("\n安装完成：成功 %d 个，失败 %d 个\n", success_count, length(failed_packages)))
     if (length(failed_packages) > 0) {
       cat("安装失败的包：\n")
@@ -393,7 +393,7 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
         cat(sprintf("  - %s (可稍后手动安装)\n", pkg))
       }
     }
-    
+
     return(list(
       status = "completed",
       success_count = success_count,
@@ -402,7 +402,7 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
       outdated_essential = outdated_essential
     ))
   }
-  
+
   return(list(status = "no_install_needed"))
 }
 
@@ -415,19 +415,19 @@ install_optional_packages <- function(optional_packages, interactive) {
   if (interactive) {
     cat("\n=== 功能扩展包安装 ===\n")
     cat("以下是可选的功能包类别：\n\n")
-    
+
     for (i in seq_along(optional_packages)) {
       pkg_count <- length(names(optional_packages[[i]]))
       cat(sprintf("%d. %s (%d个包)\n", i, names(optional_packages)[i], pkg_count))
     }
-    
+
     cat("\n选择安装方式：\n")
     cat("A. 全部安装 (推荐)\n")
     cat("B. 自定义选择\n")
     cat("C. 暂不安装\n\n")
-    
+
     choice <- readline("请输入选择 (A/B/C): ")
-    
+
     if (toupper(choice) == "A") {
       all_optional <- unlist(optional_packages, recursive = FALSE)
       cat(sprintf("正在安装 %d 个功能扩展包...\n", length(all_optional)))
@@ -436,10 +436,10 @@ install_optional_packages <- function(optional_packages, interactive) {
         pkg_counter <- pkg_counter + 1
         recommended_version <- all_optional[[pkg_name]]
         cat(sprintf("正在安装/更新第 %d 个包及其依赖，请不要操作，全部R包安装完成后会提示已完成...", pkg_counter))
-        
+
         install_result <- tryCatch({
           if (requireNamespace("remotes", quietly = TRUE)) {
-            remotes::install_version(pkg_name, version = recommended_version, 
+            remotes::install_version(pkg_name, version = recommended_version,
                                    dependencies = TRUE, upgrade = "never", quiet = TRUE)
           } else {
             install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
@@ -451,7 +451,7 @@ install_optional_packages <- function(optional_packages, interactive) {
             requireNamespace(pkg_name, quietly = TRUE)
           }, error = function(e2) FALSE)
         })
-        
+
         if (install_result) {
           cat(" 完成\n")
         } else {
@@ -464,28 +464,28 @@ install_optional_packages <- function(optional_packages, interactive) {
         cat(sprintf("[%d] %s\n", i, names(optional_packages)[i]))
       }
       cat("\n输入示例：输入 1,3 安装第1和第3类，或直接回车跳过\n")
-      
+
       user_choice <- readline("您的选择：")
       if (user_choice != "" && !is.null(user_choice)) {
         selected_nums <- as.numeric(unlist(strsplit(gsub(" ", "", user_choice), ",")))
         selected_nums <- selected_nums[!is.na(selected_nums) & selected_nums %in% 1:length(optional_packages)]
-        
+
         if (length(selected_nums) > 0) {
           selected_packages <- list()
           for (num in selected_nums) {
             selected_packages <- c(selected_packages, optional_packages[[num]])
           }
-          
+
           cat(sprintf("正在安装选中的 %d 个功能包...\n", length(selected_packages)))
           pkg_counter <- 0
           for (pkg_name in names(selected_packages)) {
             pkg_counter <- pkg_counter + 1
             recommended_version <- selected_packages[[pkg_name]]
             cat(sprintf("正在安装/更新第 %d 个包及其依赖，请不要操作，全部R包安装完成后会提示已完成...", pkg_counter))
-            
+
             install_result <- tryCatch({
               if (requireNamespace("remotes", quietly = TRUE)) {
-                remotes::install_version(pkg_name, version = recommended_version, 
+                remotes::install_version(pkg_name, version = recommended_version,
                                        dependencies = TRUE, upgrade = "never", quiet = TRUE)
               } else {
                 install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
@@ -497,7 +497,7 @@ install_optional_packages <- function(optional_packages, interactive) {
                 requireNamespace(pkg_name, quietly = TRUE)
               }, error = function(e2) FALSE)
             })
-            
+
             if (install_result) {
               cat(" 完成\n")
             } else {
@@ -516,7 +516,7 @@ install_optional_packages <- function(optional_packages, interactive) {
       cat("无效选择，已跳过功能扩展包安装。\n")
     }
   }
-  
+
   return(list(status = "completed"))
 }
 
@@ -527,11 +527,11 @@ install_optional_packages <- function(optional_packages, interactive) {
 #' @keywords internal
 generate_final_report <- function(package_defs, pkg_analysis) {
   cat("\n=== 环境检查和配置完成 ===\n")
-  
+
   final_installed <- 0
   final_outdated <- 0
   final_missing <- c()
-  
+
   for (pkg_name in names(package_defs$essential_packages)) {
     if (requireNamespace(pkg_name, quietly = TRUE)) {
       final_installed <- final_installed + 1
@@ -544,7 +544,7 @@ generate_final_report <- function(package_defs, pkg_analysis) {
       final_missing <- c(final_missing, pkg_name)
     }
   }
-  
+
   if (final_installed == length(package_defs$essential_packages)) {
     cat("常规包：全部已安装")
     if (final_outdated > 0) {
@@ -555,7 +555,7 @@ generate_final_report <- function(package_defs, pkg_analysis) {
     missing_count <- length(package_defs$essential_packages) - final_installed
     cat(sprintf("常规包：缺少 %d 个未安装\n", missing_count))
   }
-  
+
   if (final_installed == length(package_defs$essential_packages)) {
     cat("环境检查和配置完成！现在您可以：\n")
     cat("1. 开始使用已安装的R包进行分析\n")
@@ -568,9 +568,9 @@ generate_final_report <- function(package_defs, pkg_analysis) {
     cat("1. 检查网络连接后重新运行 check_packages()\n")
     cat("2. 或手动安装缺失的包，遇到问题及时咨询\n")
   }
-  
+
   cat("\n")
-  
+
   return(list(
     installed = setdiff(names(package_defs$essential_packages), final_missing),
     missing = final_missing,
@@ -585,10 +585,10 @@ generate_final_report <- function(package_defs, pkg_analysis) {
 get_package_definitions <- function() {
   min_r_version <- "4.0.0"
   base_packages <- c("base", "graphics", "grDevices", "grid", "stats", "utils")
-  
+
   essential_packages <- list(
     "bit64" = "4.0.5",
-    "digest" = "0.6.3.1", 
+    "digest" = "0.6.3.1",
     "ggplot2" = "3.5.1",
     "gridExtra" = "2.3",
     "httr" = "1.4.7",
@@ -610,7 +610,7 @@ get_package_definitions <- function() {
     "survival" = "3.6-4",
     "VIM" = "6.2.2"
   )
-  
+
   optional_packages <- list(
     "机器学习" = list(
       "xgboost" = "1.7.8.1",
@@ -626,7 +626,7 @@ get_package_definitions <- function() {
       "lubridate" = "1.9.2"
     )
   )
-  
+
   return(list(
     min_r_version = min_r_version,
     base_packages = base_packages,
@@ -635,33 +635,33 @@ get_package_definitions <- function() {
   ))
 }
 
-#' R Package Environment Check and Dependency Installation 
+#' R Package Environment Check and Dependency Installation
 #' @param interactive interactive mode
 #' @param install_missing auto install
 #' @return Returns list
 #' @export
 check_packages <- function(interactive = TRUE, install_missing = TRUE) {
   package_defs <- get_package_definitions()
-  
+
   sys_config <- initialize_system_config()
-  
+
   env_report <- generate_environment_report(sys_config)
-  
+
   path_result <- handle_library_path_configuration(interactive, sys_config)
   if (!is.null(path_result$status) && path_result$status == "cancelled") {
     return(invisible(path_result))
   }
-  
+
   pkg_analysis <- analyze_package_status(package_defs)
-  
+
   install_result <- NULL
   if (install_missing && length(pkg_analysis$packages_to_install) > 0) {
     install_result <- install_essential_packages(pkg_analysis, package_defs, interactive)
     if (!is.null(install_result$status) && install_result$status == "cancelled") {
       return(invisible(list(
-        installed = pkg_analysis$installed_essential, 
-        missing = pkg_analysis$missing_essential, 
-        outdated = pkg_analysis$outdated_essential, 
+        installed = pkg_analysis$installed_essential,
+        missing = pkg_analysis$missing_essential,
+        outdated = pkg_analysis$outdated_essential,
         status = "cancelled"
       )))
     }
@@ -672,12 +672,12 @@ check_packages <- function(interactive = TRUE, install_missing = TRUE) {
       pkg_analysis$outdated_essential <- install_result$outdated_essential
     }
   }
-  
+
   if (interactive && length(pkg_analysis$missing_essential) == 0) {
     install_optional_packages(package_defs$optional_packages, interactive)
   }
-  
+
   final_result <- generate_final_report(package_defs, pkg_analysis)
-  
+
   return(invisible(final_result))
 }
