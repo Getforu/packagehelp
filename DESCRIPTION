@@ -1,9 +1,9 @@
-Package: packhelp
+Package: packagehelp
 Type: Package
 Title: R Package Installation Helper
 Version: 0.1.0
 Authors@R: c(
-    person("packhelp", "Team", email = "packhelpexample@mailxxx.com", role = c("aut", "cre")))
+    person("packagehelp", "Team", email = "packagehelpexample@mailxxx.com", role = c("aut", "cre")))
 Description: A helper package.
 License: GPL-3
 Encoding: UTF-8
