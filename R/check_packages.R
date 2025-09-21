@@ -584,7 +584,7 @@ generate_final_report <- function(package_defs, pkg_analysis) {
 #' @keywords internal
 get_package_definitions <- function() {
   min_r_version <- "4.0.0"
-  base_packages <- c("base", "graphics", "grDevices", "grid", "stats", "utils")
+  base_packages <- c("base", "graphics", "grDevices", "grid", "stats", "utils","tools")
 
   essential_packages <- list(
     "bit64" = "4.0.5",
@@ -600,15 +600,29 @@ get_package_definitions <- function() {
     "base64enc" = "0.1-3",
     "car" = "3.1-2",
     "dplyr" = "1.1.3",
+    "readxl" = "1.4.3",
+    "xlsx" = "0.6.5",
+    "arrow" = "20.0.0.2",
+    "feather" = "0.3.5",
+    "haven" = "2.5.3",
     "gt" = "0.9.0",
     "magrittr" = "2.0.3",
+    "foreign" = "0.8-86",
+    "sas7bdat" = "0.8",
     "mice" = "3.16.0",
     "openxlsx" = "4.2.5.2",
     "pROC" = "1.18.5",
     "rlang" = "1.1.1",
     "rms" = "6.7-1",
+    "data.table" = "1.14.8",
+    "rjson" = "0.2.21",
+    "readr" = "2.1.4",
+    "vroom" = "1.6.3",
     "survival" = "3.6-4",
-    "VIM" = "6.2.2"
+    "tibble" = "3.2.1",
+    "VIM" = "6.2.2",
+    "stringr" = "1.5.0",
+    "lubridate" = "1.9.2"
   )
 
   optional_packages <- list(
@@ -620,10 +634,19 @@ get_package_definitions <- function() {
     "高级绘图" = list(
       "patchwork" = "1.1.2"
     ),
-    "数据处理" = list(
-      "data.table" = "1.14.8",
-      "stringr" = "1.5.0",
-      "lubridate" = "1.9.2"
+    "预测模型" = list(
+      "MASS" = "7.3-60.2",
+      "Hmisc" = "5.1-0",
+      "Boruta" = "8.0.0",
+      "smotefamily" = "1.4.0",
+      "dcurves" = "0.5.0",
+      "rmda" = "1.6",
+      "ResourceSelection" = "0.3-6",
+      "classInt" = "0.4-11",
+      "corrplot" = "0.92",
+      "scales" = "1.3.0",
+      "htmltools" = "0.5.5",
+      "writexl" = "1.4.2"
     )
   )
 
