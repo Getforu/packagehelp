@@ -307,6 +307,10 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
   missing_essential <- pkg_analysis$missing_essential
   outdated_essential <- pkg_analysis$outdated_essential
 
+  # Determine package type based on OS for robust installation
+  os_type <- Sys.info()["sysname"]
+  pkg_type <- if(os_type == "Windows") "binary" else "both"
+
   if (length(packages_to_install) > 0) {
     cat(sprintf("\n即将为您安装/更新 %d 个常规包\n", length(packages_to_install)))
     if (length(missing_essential) > 0) {
@@ -338,27 +342,39 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
       cat(sprintf("正在安装/更新第 %d 个包及其依赖，请不要操作，全部R包安装完成后会提示已完成...", i))
 
       install_result <- tryCatch({
-        if (requireNamespace("remotes", quietly = TRUE)) {
-          remotes::install_version(pkg_name, version = recommended_version,
-                                 dependencies = TRUE, upgrade = "never", quiet = TRUE)
-        } else {
-          install.packages("remotes", quiet = TRUE)
-          if (requireNamespace("remotes", quietly = TRUE)) {
-            remotes::install_version(pkg_name, version = recommended_version,
-                                   dependencies = TRUE, upgrade = "never", quiet = TRUE)
-          } else {
-            install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
-          }
-        }
+        # Try binary/both installation first for better reliability
+        install.packages(pkg_name,
+                        dependencies = TRUE,
+                        type = pkg_type,
+                        quiet = TRUE)
 
+        # Verify installation and check version
         if (requireNamespace(pkg_name, quietly = TRUE)) {
+          current_version <- as.character(packageVersion(pkg_name))
+          # If version is too old, try remotes for specific version
+          if (compareVersion(current_version, recommended_version) < 0) {
+            if (requireNamespace("remotes", quietly = TRUE)) {
+              tryCatch({
+                remotes::install_version(pkg_name, version = recommended_version,
+                                       dependencies = TRUE, upgrade = "never",
+                                       type = pkg_type, quiet = TRUE)
+              }, error = function(e) {
+                # Keep the successfully installed version even if not exact match
+                TRUE
+              })
+            }
+          }
           TRUE
         } else {
           FALSE
         }
       }, error = function(e) {
+        # Fallback to source installation if binary fails
         tryCatch({
-          install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
+          install.packages(pkg_name,
+                          dependencies = TRUE,
+                          type = "source",
+                          quiet = TRUE)
           requireNamespace(pkg_name, quietly = TRUE)
         }, error = function(e2) {
           FALSE
@@ -412,6 +428,9 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
 #' @return results
 #' @keywords internal
 install_optional_packages <- function(optional_packages, interactive) {
+  # Determine package type based on OS for robust installation
+  os_type <- Sys.info()["sysname"]
+  pkg_type <- if(os_type == "Windows") "binary" else "both"
   if (interactive) {
     cat("\n=== 功能扩展包安装 ===\n")
     cat("以下是可选的功能包类别：\n\n")
@@ -438,16 +457,34 @@ install_optional_packages <- function(optional_packages, interactive) {
         cat(sprintf("正在安装/更新第 %d 个包及其依赖，请不要操作，全部R包安装完成后会提示已完成...", pkg_counter))
 
         install_result <- tryCatch({
-          if (requireNamespace("remotes", quietly = TRUE)) {
-            remotes::install_version(pkg_name, version = recommended_version,
-                                   dependencies = TRUE, upgrade = "never", quiet = TRUE)
+          # Use binary/both installation for better reliability
+          install.packages(pkg_name,
+                          dependencies = TRUE,
+                          type = pkg_type,
+                          quiet = TRUE)
+
+          # Verify installation and check version if needed
+          if (requireNamespace(pkg_name, quietly = TRUE)) {
+            current_version <- as.character(packageVersion(pkg_name))
+            if (compareVersion(current_version, recommended_version) < 0) {
+              if (requireNamespace("remotes", quietly = TRUE)) {
+                tryCatch({
+                  remotes::install_version(pkg_name, version = recommended_version,
+                                         dependencies = TRUE, upgrade = "never",
+                                         type = pkg_type, quiet = TRUE)
+                }, error = function(e) TRUE)
+              }
+            }
+            TRUE
           } else {
-            install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
+            FALSE
           }
-          requireNamespace(pkg_name, quietly = TRUE)
         }, error = function(e) {
           tryCatch({
-            install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
+            install.packages(pkg_name,
+                            dependencies = TRUE,
+                            type = "source",
+                            quiet = TRUE)
             requireNamespace(pkg_name, quietly = TRUE)
           }, error = function(e2) FALSE)
         })
@@ -484,16 +521,34 @@ install_optional_packages <- function(optional_packages, interactive) {
             cat(sprintf("正在安装/更新第 %d 个包及其依赖，请不要操作，全部R包安装完成后会提示已完成...", pkg_counter))
 
             install_result <- tryCatch({
-              if (requireNamespace("remotes", quietly = TRUE)) {
-                remotes::install_version(pkg_name, version = recommended_version,
-                                       dependencies = TRUE, upgrade = "never", quiet = TRUE)
+              # Use binary/both installation for better reliability
+              install.packages(pkg_name,
+                              dependencies = TRUE,
+                              type = pkg_type,
+                              quiet = TRUE)
+
+              # Verify installation and check version if needed
+              if (requireNamespace(pkg_name, quietly = TRUE)) {
+                current_version <- as.character(packageVersion(pkg_name))
+                if (compareVersion(current_version, recommended_version) < 0) {
+                  if (requireNamespace("remotes", quietly = TRUE)) {
+                    tryCatch({
+                      remotes::install_version(pkg_name, version = recommended_version,
+                                             dependencies = TRUE, upgrade = "never",
+                                             type = pkg_type, quiet = TRUE)
+                    }, error = function(e) TRUE)
+                  }
+                }
+                TRUE
               } else {
-                install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
+                FALSE
               }
-              requireNamespace(pkg_name, quietly = TRUE)
             }, error = function(e) {
               tryCatch({
-                install.packages(pkg_name, dependencies = TRUE, quiet = TRUE)
+                install.packages(pkg_name,
+                                dependencies = TRUE,
+                                type = "source",
+                                quiet = TRUE)
                 requireNamespace(pkg_name, quietly = TRUE)
               }, error = function(e2) FALSE)
             })
