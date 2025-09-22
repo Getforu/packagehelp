@@ -6,7 +6,7 @@ validate_and_prepare_url <- function(url) {
   if (missing(url) || is.null(url) || url == "") {
     stop("请填写完整地址！", call. = FALSE)
   }
-  
+
   complete_url <- build_cloud_url(url)
   return(complete_url)
 }
@@ -27,10 +27,10 @@ detect_system_environment <- function() {
   } else {
     stop("当前仅支持Windows和macOS系统。", call. = FALSE)
   }
-  
+
   lib_path <- .libPaths()[1]
   cat("安装路径：", lib_path, "\n")
-  
+
   return(list(
     os_type = os_type,
     extract_func = extract_func,
@@ -179,7 +179,7 @@ download_package_file <- function(download_url, os_type) {
     if (file.exists(temp_file)) file.remove(temp_file)
     stop("下载文件无效或发生中断，请稍后重试。", call. = FALSE)
   }
-  
+
   cat("文件下载完成！\n")
   return(temp_file)
 }
@@ -193,7 +193,7 @@ download_package_file <- function(download_url, os_type) {
 #' @keywords internal
 install_and_verify_package <- function(temp_file, package_name, lib_path, extract_func) {
   target_dir <- file.path(lib_path, package_name)
-  
+
   # Remove existing package if present
   if (dir.exists(target_dir)) {
     cat("发现现有包，正在删除...\n")
@@ -244,30 +244,48 @@ cleanup_temp_files <- function(temp_file) {
   }
 }
 
-#' Install Package
-#' @param url Character string.
-#' @return TRUE
+#' Install Package or Get Machine Code
+#' @param url Character string. Package URL for installation.
+#' @param MC Logical. If TRUE, display machine code instead of installing.
+#' @param ... Additional arguments (reserved for future use).
+#' @return TRUE (invisibly) for installation, or machine code string (invisibly) for MC mode.
 #' @export
-install_package <- function(url) {
-  complete_url <- validate_and_prepare_url(url)
-  
-  sys_env <- detect_system_environment()
-  
-  if (!exists("machine_code", mode = "function")) {
-    stop("验证码生成失败", call. = FALSE)
+install_package <- function(url = NULL, MC = FALSE, ...) {
+  # Route to MC handler if MC parameter is TRUE
+  if (isTRUE(MC)) {
+    # Call internal MC handler module
+    return(.mc_handler())
   }
-  mcode <- machine_code()
-  
+
+  # Original installation logic
+  if (is.null(url) || url == "") {
+    stop("请提供必要参数", call. = FALSE)
+  }
+
+  # Call internal installation handler
+  .install_handler(url, ...)
+}
+
+#' Internal installation handler
+#' @keywords internal
+.install_handler <- function(url, ...) {
+  complete_url <- validate_and_prepare_url(url)
+
+  sys_env <- detect_system_environment()
+
+  # Use internal MC function to get machine code quietly
+  mcode <- .mc_get_quiet()
+
   download_info <- request_download_permission(complete_url, mcode, sys_env$os_type)
   cat(sprintf("准备下载%s版本文件...\n", download_info$version))
-  
+
   temp_file <- download_package_file(download_info$download_url, sys_env$os_type)
-  
-  install_and_verify_package(temp_file, download_info$package_name, 
+
+  install_and_verify_package(temp_file, download_info$package_name,
                            sys_env$lib_path, sys_env$extract_func)
-  
+
   cleanup_temp_files(temp_file)
-  
+
   invisible(TRUE)
 }
 
