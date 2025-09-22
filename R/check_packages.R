@@ -656,7 +656,6 @@ get_package_definitions <- function() {
     "car" = "3.1-2",
     "dplyr" = "1.1.3",
     "readxl" = "1.4.3",
-    "xlsx" = "0.6.5",
     "arrow" = "20.0.0.2",
     "feather" = "0.3.5",
     "haven" = "2.5.3",
