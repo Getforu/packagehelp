@@ -165,15 +165,21 @@ install_optional_packages <- function(optional_packages, interactive) {
   os_type <- Sys.info()["sysname"]
   pkg_type <- if(os_type == "Windows") "binary" else "both"
 
+  # Performance optimization: Get all installed packages at once (cache for check_package_status)
+  installed_pkgs_cache <- as.data.frame(installed.packages()[, c("Package", "Version")], stringsAsFactors = FALSE)
+  rownames(installed_pkgs_cache) <- installed_pkgs_cache$Package
+
   # Helper function to check package status
   check_package_status <- function(pkg_name, recommended_version) {
     if (!requireNamespace(pkg_name, quietly = TRUE)) {
       return(list(status = "not_installed", action = "install"))
     }
 
+    # Use cached package info instead of calling packageVersion()
+    current_version <- installed_pkgs_cache[pkg_name, "Version"]
+
     # Check if package is loaded
     if (pkg_name %in% loadedNamespaces()) {
-      current_version <- as.character(packageVersion(pkg_name))
       version_compare <- tryCatch({
         compareVersion(current_version, recommended_version)
       }, error = function(e) NA)
@@ -194,7 +200,6 @@ install_optional_packages <- function(optional_packages, interactive) {
     }
 
     # Package installed but not loaded
-    current_version <- as.character(packageVersion(pkg_name))
     version_compare <- tryCatch({
       compareVersion(current_version, recommended_version)
     }, error = function(e) NA)
@@ -302,6 +307,9 @@ install_optional_packages <- function(optional_packages, interactive) {
         cat(sprintf("\n开始处理 %d 个需要安装/更新的包...\n", total_to_process))
         cat("提示：安装过程会自动处理网络超时和重试，请耐心等待\n\n")
 
+        # Start timing
+        start_time <- Sys.time()
+
         pkg_counter <- 0
         failed_optional <- list()  # Track failures with details
 
@@ -361,6 +369,14 @@ install_optional_packages <- function(optional_packages, interactive) {
             )
           }
         }
+
+        # Calculate elapsed time
+        end_time <- Sys.time()
+        elapsed_time <- difftime(end_time, start_time, units = "secs")
+        elapsed_mins <- floor(as.numeric(elapsed_time) / 60)
+        elapsed_secs <- round(as.numeric(elapsed_time) %% 60)
+
+        cat(sprintf("\n功能包安装完成，总耗时：%d分%d秒\n", elapsed_mins, elapsed_secs))
 
         # Report failures if any
         if (length(failed_optional) > 0) {
@@ -470,6 +486,9 @@ install_optional_packages <- function(optional_packages, interactive) {
             cat(sprintf("\n开始处理 %d 个需要安装/更新的包...\n", total_to_process))
             cat("提示：安装过程会自动处理网络超时和重试，请耐心等待\n\n")
 
+            # Start timing
+            start_time <- Sys.time()
+
             pkg_counter <- 0
             failed_optional_custom <- list()  # Track failures with details
 
@@ -529,6 +548,14 @@ install_optional_packages <- function(optional_packages, interactive) {
                 )
               }
             }
+
+            # Calculate elapsed time
+            end_time <- Sys.time()
+            elapsed_time <- difftime(end_time, start_time, units = "secs")
+            elapsed_mins <- floor(as.numeric(elapsed_time) / 60)
+            elapsed_secs <- round(as.numeric(elapsed_time) %% 60)
+
+            cat(sprintf("\n功能包安装完成，总耗时：%d分%d秒\n", elapsed_mins, elapsed_secs))
 
             # Report failures if any
             if (length(failed_optional_custom) > 0) {

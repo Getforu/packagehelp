@@ -234,6 +234,10 @@ analyze_package_status <- function(package_defs) {
 
   cat("\n常规包状态：\n")
 
+  # Performance optimization: Get all installed packages at once
+  installed_pkgs_info <- as.data.frame(installed.packages()[, c("Package", "Version")], stringsAsFactors = FALSE)
+  rownames(installed_pkgs_info) <- installed_pkgs_info$Package
+
   installed_essential <- c()
   missing_essential <- c()
   outdated_essential <- c()
@@ -244,7 +248,8 @@ analyze_package_status <- function(package_defs) {
     if (!requireNamespace(pkg_name, quietly = TRUE)) {
       missing_essential <- c(missing_essential, pkg_name)
     } else {
-      current_version <- as.character(packageVersion(pkg_name))
+      # Use cached package info instead of calling packageVersion()
+      current_version <- installed_pkgs_info[pkg_name, "Version"]
       version_comparison <- compareVersion(current_version, recommended_version)
 
       if (version_comparison < 0) {
@@ -320,6 +325,22 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
     cat("=== 正在安装/更新常规包 ===\n")
     cat("提示：安装过程会自动处理网络超时和重试，请耐心等待\n\n")
 
+    # Start timing
+    start_time <- Sys.time()
+
+    # Pre-generate progress bar strings for milestones
+    milestones <- c(0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 1.00)
+    progress_bars <- list(
+      "10" = list(bar = paste(rep("█", 2), collapse = ""), empty = paste(rep("░", 18), collapse = ""), percent = 10),
+      "25" = list(bar = paste(rep("█", 5), collapse = ""), empty = paste(rep("░", 15), collapse = ""), percent = 25),
+      "50" = list(bar = paste(rep("█", 10), collapse = ""), empty = paste(rep("░", 10), collapse = ""), percent = 50),
+      "75" = list(bar = paste(rep("█", 15), collapse = ""), empty = paste(rep("░", 5), collapse = ""), percent = 75),
+      "90" = list(bar = paste(rep("█", 18), collapse = ""), empty = paste(rep("░", 2), collapse = ""), percent = 90),
+      "95" = list(bar = paste(rep("█", 19), collapse = ""), empty = paste(rep("░", 1), collapse = ""), percent = 95),
+      "100" = list(bar = paste(rep("█", 20), collapse = ""), empty = "", percent = 100)
+    )
+    last_milestone <- 0
+
     success_count <- 0
     failed_packages <- list()  # Changed to list to store error details
 
@@ -370,15 +391,28 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
         )
       }
 
-      # Progress bar
-      progress <- round((i / length(packages_to_install)) * 100)
-      progress_bar <- paste(rep("█", floor(progress/5)), collapse = "")
-      progress_empty <- paste(rep("░", 20 - floor(progress/5)), collapse = "")
-      cat(sprintf("总进度: %s%s %d%%\n\n", progress_bar, progress_empty, progress))
+      # Progress bar - only update at key milestones (10%, 25%, 50%, 75%, 90%, 95%, 100%)
+      current_progress <- i / length(packages_to_install)
+      for (m in milestones) {
+        if (current_progress >= m && last_milestone < m) {
+          milestone_key <- as.character(m * 100)
+          pb <- progress_bars[[milestone_key]]
+          cat(sprintf("总进度: %s%s %d%%\n\n", pb$bar, pb$empty, pb$percent))
+          last_milestone <- m
+          break
+        }
+      }
     }
+
+    # Calculate elapsed time
+    end_time <- Sys.time()
+    elapsed_time <- difftime(end_time, start_time, units = "secs")
+    elapsed_mins <- floor(as.numeric(elapsed_time) / 60)
+    elapsed_secs <- round(as.numeric(elapsed_time) %% 60)
 
     cat(sprintf("\n=== 安装完成 ===\n"))
     cat(sprintf("成功：%d 个，失败：%d 个\n", success_count, length(failed_packages)))
+    cat(sprintf("总耗时：%d分%d秒\n", elapsed_mins, elapsed_secs))
 
     if (length(failed_packages) > 0) {
       cat("\n--- 安装失败详情 ---\n")
