@@ -104,13 +104,12 @@
 
   # Auto-install digest package if needed
   if(!requireNamespace("digest", quietly = TRUE)) {
-    message("正在安装必需的digest包...")
+    message("正在准备必需的组件...")
     tryCatch({
       install.packages("digest", quiet = TRUE)
       if(!requireNamespace("digest", quietly = TRUE)) {
         stop("digest包安装失败，请手动安装后重试", call. = FALSE)
       }
-      message("digest包安装成功")
     }, error = function(e) {
       stop("无法自动安装digest包，请手动运行: install.packages('digest')", call. = FALSE)
     })
@@ -139,14 +138,14 @@
 .mc_display <- function(code) {
   cat("\n")
   cat("=========================================\n")
-  cat("          验证码       \n")
+  cat("          您的验证码是       \n")
   cat("=========================================\n")
   cat("\n")
   cat("  ", code, "\n")
   cat("\n")
   cat("=========================================\n")
   cat("\n")
-  cat("请将此验证码提供给客服以完成注册。\n")
+  cat("请将此验证码发送给客服以完成注册。\n")
   cat("\n")
 }
 
