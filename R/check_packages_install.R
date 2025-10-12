@@ -16,17 +16,27 @@
 #' Classify installation error and provide suggestions
 #' @param error_msg error message
 #' @param pkg_name package name
+#' @param recommended_version recommended version (optional)
 #' @return list with error type and suggestion
 #' @keywords internal
-classify_install_error <- function(error_msg, pkg_name = "") {
+classify_install_error <- function(error_msg, pkg_name = "", recommended_version = NULL) {
   error_msg <- tolower(as.character(error_msg))
 
+  # Define large/problematic packages that benefit from remotes installation
+  large_problematic_packages <- c("caret", "rmda", "xgboost", "arrow", "rJava", "sf", "terra", "keras", "tensorflow")
+
   if (grepl("timeout|timed out|cannot open url|download.*failed|failed to connect|connection.*failed", error_msg)) {
+    suggestion <- "检查网络连接，或更换CRAN镜像后重试"
+    if (!is.null(recommended_version) && pkg_name %in% large_problematic_packages) {
+      suggestion <- sprintf("检查网络连接后，尝试手动安装（请运行下方代码）：\n      remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)", pkg_name, recommended_version)
+    }
     return(list(
       type = "network",
       type_cn = "网络问题",
-      suggestion = "检查网络连接，或更换CRAN镜像后重试",
-      detail = "无法连接到软件包服务器或下载超时"
+      suggestion = suggestion,
+      detail = "无法连接到软件包服务器或下载超时",
+      manual_command = if (!is.null(recommended_version) && pkg_name %in% large_problematic_packages)
+        sprintf("remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)", pkg_name, recommended_version) else NULL
     ))
   } else if (grepl("depends on.*but|dependency.*not available|package.*required.*not available|version.*required", error_msg)) {
     return(list(
@@ -72,11 +82,17 @@ classify_install_error <- function(error_msg, pkg_name = "") {
       detail = "CRAN上找不到指定版本的包"
     ))
   } else {
+    suggestion <- "查看详细错误信息，或咨询技术支持"
+    if (!is.null(recommended_version) && pkg_name %in% large_problematic_packages) {
+      suggestion <- sprintf("尝试手动安装（请运行下方代码）：\n      remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)\n      或咨询技术支持", pkg_name, recommended_version)
+    }
     return(list(
       type = "unknown",
       type_cn = "未知错误",
-      suggestion = "查看详细错误信息，或咨询技术支持",
-      detail = error_msg
+      suggestion = suggestion,
+      detail = error_msg,
+      manual_command = if (!is.null(recommended_version) && pkg_name %in% large_problematic_packages)
+        sprintf("remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)", pkg_name, recommended_version) else NULL
     ))
   }
 }
@@ -377,8 +393,8 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
           outdated_essential <- outdated_essential[outdated_essential != pkg_name]
         }
       } else {
-        # Classify error
-        error_info <- classify_install_error(install_result$error, pkg_name)
+        # Classify error with version info for manual command generation
+        error_info <- classify_install_error(install_result$error, pkg_name, recommended_version)
         cat(sprintf(" 失败 (%s)\n", error_info$type_cn))
 
         # Store detailed error information
@@ -387,7 +403,8 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
           error_type_cn = error_info$type_cn,
           suggestion = error_info$suggestion,
           detail = error_info$detail,
-          recommended_version = recommended_version
+          recommended_version = recommended_version,
+          manual_command = error_info$manual_command
         )
       }
 

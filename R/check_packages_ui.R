@@ -333,13 +333,14 @@ install_optional_packages <- function(optional_packages, interactive) {
             }
             cat(sprintf(" 完成%s\n", retry_info))
           } else {
-            error_info <- classify_install_error(install_result$error, pkg_name)
+            error_info <- classify_install_error(install_result$error, pkg_name, recommended_version)
             cat(sprintf(" 失败 (%s)\n", error_info$type_cn))
             failed_optional[[pkg_name]] <- list(
               error_type = error_info$type,
               error_type_cn = error_info$type_cn,
               suggestion = error_info$suggestion,
-              recommended_version = recommended_version
+              recommended_version = recommended_version,
+              manual_command = error_info$manual_command
             )
           }
         }
@@ -362,13 +363,14 @@ install_optional_packages <- function(optional_packages, interactive) {
             }
             cat(sprintf(" 完成%s\n", retry_info))
           } else {
-            error_info <- classify_install_error(install_result$error, pkg_name)
+            error_info <- classify_install_error(install_result$error, pkg_name, pkg_info$recommended)
             cat(sprintf(" 失败 (%s)\n", error_info$type_cn))
             failed_optional[[pkg_name]] <- list(
               error_type = error_info$type,
               error_type_cn = error_info$type_cn,
               suggestion = error_info$suggestion,
-              recommended_version = pkg_info$recommended
+              recommended_version = pkg_info$recommended,
+              manual_command = error_info$manual_command
             )
           }
         }
@@ -512,13 +514,14 @@ install_optional_packages <- function(optional_packages, interactive) {
                 }
                 cat(sprintf(" 完成%s\n", retry_info))
               } else {
-                error_info <- classify_install_error(install_result$error, pkg_name)
+                error_info <- classify_install_error(install_result$error, pkg_name, recommended_version)
                 cat(sprintf(" 失败 (%s)\n", error_info$type_cn))
                 failed_optional_custom[[pkg_name]] <- list(
                   error_type = error_info$type,
                   error_type_cn = error_info$type_cn,
                   suggestion = error_info$suggestion,
-                  recommended_version = recommended_version
+                  recommended_version = recommended_version,
+                  manual_command = error_info$manual_command
                 )
               }
             }
@@ -541,13 +544,14 @@ install_optional_packages <- function(optional_packages, interactive) {
                 }
                 cat(sprintf(" 完成%s\n", retry_info))
               } else {
-                error_info <- classify_install_error(install_result$error, pkg_name)
+                error_info <- classify_install_error(install_result$error, pkg_name, pkg_info$recommended)
                 cat(sprintf(" 失败 (%s)\n", error_info$type_cn))
                 failed_optional_custom[[pkg_name]] <- list(
                   error_type = error_info$type,
                   error_type_cn = error_info$type_cn,
                   suggestion = error_info$suggestion,
-                  recommended_version = pkg_info$recommended
+                  recommended_version = pkg_info$recommended,
+                  manual_command = error_info$manual_command
                 )
               }
             }

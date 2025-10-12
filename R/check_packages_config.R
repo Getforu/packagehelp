@@ -87,6 +87,7 @@ get_package_definitions <- function() {
   base_packages <- c("base", "graphics", "grDevices", "grid", "stats", "utils","tools")
 
   essential_packages <- list(
+    "remotes" = "2.4.2",
     "bit64" = "4.0.5",
     "digest" = "0.6.3.1",
     "ggplot2" = "3.5.1",
