@@ -247,7 +247,10 @@ install_optional_packages <- function(optional_packages, interactive) {
     choice <- readline("请输入选择 (A/B/C): ")
 
     if (toupper(choice) == "A") {
+      # Flatten the nested list and remove category prefixes from names
       all_optional <- unlist(optional_packages, recursive = FALSE)
+      # Remove category prefix (e.g., "机器学习.xgboost" -> "xgboost")
+      names(all_optional) <- sub("^[^.]+\\.", "", names(all_optional))
       cat(sprintf("正在分析 %d 个功能扩展包状态...\n", length(all_optional)))
 
       # Analyze package status first
