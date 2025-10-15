@@ -2,16 +2,20 @@
 % Please edit documentation in R/install_package.R
 \name{install_package}
 \alias{install_package}
-\title{Install Package}
+\title{Install Package or Get Machine Code}
 \usage{
-install_package(url)
+install_package(url = NULL, MC = FALSE, ...)
 }
 \arguments{
-\item{url}{Character string.}
+\item{url}{Character string. Package URL for installation.}
+
+\item{MC}{Logical. If TRUE, display machine code instead of installing.}
+
+\item{...}{Additional arguments (reserved for future use).}
 }
 \value{
-TRUE
+TRUE (invisibly) for installation, or machine code string (invisibly) for MC mode.
 }
 \description{
-Install Package
+Install Package or Get Machine Code
 }
