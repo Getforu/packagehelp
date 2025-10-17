@@ -166,7 +166,11 @@ install_optional_packages <- function(optional_packages, interactive) {
   pkg_type <- if(os_type == "Windows") "binary" else "both"
 
   # Performance optimization: Get all installed packages at once (cache for check_package_status)
-  installed_pkgs_cache <- as.data.frame(installed.packages()[, c("Package", "Version")], stringsAsFactors = FALSE)
+  # Remove duplicates by keeping only the first occurrence of each package
+  installed_pkgs_matrix <- installed.packages()[, c("Package", "Version")]
+  installed_pkgs_cache <- as.data.frame(installed_pkgs_matrix, stringsAsFactors = FALSE)
+  # Remove duplicate packages (keep first occurrence which has highest priority)
+  installed_pkgs_cache <- installed_pkgs_cache[!duplicated(installed_pkgs_cache$Package), ]
   rownames(installed_pkgs_cache) <- installed_pkgs_cache$Package
 
   # Helper function to check package status

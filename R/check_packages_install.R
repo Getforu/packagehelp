@@ -251,7 +251,11 @@ analyze_package_status <- function(package_defs) {
   cat("\n常规包状态：\n")
 
   # Performance optimization: Get all installed packages at once
-  installed_pkgs_info <- as.data.frame(installed.packages()[, c("Package", "Version")], stringsAsFactors = FALSE)
+  # Remove duplicates by keeping only the first occurrence of each package
+  installed_pkgs_matrix <- installed.packages()[, c("Package", "Version")]
+  installed_pkgs_info <- as.data.frame(installed_pkgs_matrix, stringsAsFactors = FALSE)
+  # Remove duplicate packages (keep first occurrence which has highest priority)
+  installed_pkgs_info <- installed_pkgs_info[!duplicated(installed_pkgs_info$Package), ]
   rownames(installed_pkgs_info) <- installed_pkgs_info$Package
 
   installed_essential <- c()
