@@ -250,14 +250,6 @@ analyze_package_status <- function(package_defs) {
 
   cat("\n常规包状态：\n")
 
-  # Performance optimization: Get all installed packages at once
-  # Remove duplicates by keeping only the first occurrence of each package
-  installed_pkgs_matrix <- installed.packages()[, c("Package", "Version")]
-  installed_pkgs_info <- as.data.frame(installed_pkgs_matrix, stringsAsFactors = FALSE)
-  # Remove duplicate packages (keep first occurrence which has highest priority)
-  installed_pkgs_info <- installed_pkgs_info[!duplicated(installed_pkgs_info$Package), ]
-  rownames(installed_pkgs_info) <- installed_pkgs_info$Package
-
   installed_essential <- c()
   missing_essential <- c()
   outdated_essential <- c()
@@ -268,8 +260,8 @@ analyze_package_status <- function(package_defs) {
     if (!requireNamespace(pkg_name, quietly = TRUE)) {
       missing_essential <- c(missing_essential, pkg_name)
     } else {
-      # Use cached package info instead of calling packageVersion()
-      current_version <- installed_pkgs_info[pkg_name, "Version"]
+      # Use packageVersion() directly - more reliable than caching
+      current_version <- as.character(packageVersion(pkg_name))
       version_comparison <- compareVersion(current_version, recommended_version)
 
       if (version_comparison < 0) {

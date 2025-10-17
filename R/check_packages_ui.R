@@ -165,22 +165,14 @@ install_optional_packages <- function(optional_packages, interactive) {
   os_type <- Sys.info()["sysname"]
   pkg_type <- if(os_type == "Windows") "binary" else "both"
 
-  # Performance optimization: Get all installed packages at once (cache for check_package_status)
-  # Remove duplicates by keeping only the first occurrence of each package
-  installed_pkgs_matrix <- installed.packages()[, c("Package", "Version")]
-  installed_pkgs_cache <- as.data.frame(installed_pkgs_matrix, stringsAsFactors = FALSE)
-  # Remove duplicate packages (keep first occurrence which has highest priority)
-  installed_pkgs_cache <- installed_pkgs_cache[!duplicated(installed_pkgs_cache$Package), ]
-  rownames(installed_pkgs_cache) <- installed_pkgs_cache$Package
-
   # Helper function to check package status
   check_package_status <- function(pkg_name, recommended_version) {
     if (!requireNamespace(pkg_name, quietly = TRUE)) {
       return(list(status = "not_installed", action = "install"))
     }
 
-    # Use cached package info instead of calling packageVersion()
-    current_version <- installed_pkgs_cache[pkg_name, "Version"]
+    # Use packageVersion() directly - more reliable
+    current_version <- as.character(packageVersion(pkg_name))
 
     # Check if package is loaded
     if (pkg_name %in% loadedNamespaces()) {
