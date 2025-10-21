@@ -13,6 +13,83 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#' Persist library path configuration
+#' @param lib_path Library path to persist
+#' @return list with success status
+#' @keywords internal
+persist_library_path <- function(lib_path) {
+  success <- FALSE
+  methods_tried <- c()
+
+  # Method 1: .Rprofile (most reliable, user-level)
+  tryCatch({
+    rprofile_path <- file.path(Sys.getenv("HOME"), ".Rprofile")
+
+    # Read existing content
+    existing_content <- if (file.exists(rprofile_path)) {
+      readLines(rprofile_path, warn = FALSE)
+    } else {
+      character(0)
+    }
+
+    # Check if already configured
+    lib_path_normalized <- normalizePath(lib_path, winslash = "/", mustWork = FALSE)
+    pattern <- paste0("^\\.libPaths\\(.*", gsub("\\\\", "\\\\\\\\", lib_path_normalized))
+    already_configured <- any(grepl(pattern, existing_content))
+
+    if (!already_configured) {
+      # Add library path configuration
+      new_lines <- c(
+        "",
+        "# Auto-configured by packagehelp",
+        sprintf('.libPaths(c("%s", .libPaths()))', lib_path_normalized),
+        ""
+      )
+
+      # Write to .Rprofile
+      writeLines(c(existing_content, new_lines), rprofile_path)
+      success <- TRUE
+      methods_tried <- c(methods_tried, ".Rprofile")
+    } else {
+      success <- TRUE
+      methods_tried <- c(methods_tried, ".Rprofile (already configured)")
+    }
+  }, error = function(e) {
+    methods_tried <<- c(methods_tried, ".Rprofile (failed)")
+  })
+
+  # Method 2: R_LIBS_USER environment variable (fallback)
+  if (!success) {
+    tryCatch({
+      renviron_path <- file.path(Sys.getenv("HOME"), ".Renviron")
+
+      existing_content <- if (file.exists(renviron_path)) {
+        readLines(renviron_path, warn = FALSE)
+      } else {
+        character(0)
+      }
+
+      # Remove existing R_LIBS_USER if present
+      existing_content <- existing_content[!grepl("^R_LIBS_USER=", existing_content)]
+
+      # Add new R_LIBS_USER
+      lib_path_normalized <- normalizePath(lib_path, winslash = "/", mustWork = FALSE)
+      new_line <- sprintf('R_LIBS_USER="%s"', lib_path_normalized)
+
+      writeLines(c(existing_content, "", "# Auto-configured by packagehelp", new_line), renviron_path)
+      success <- TRUE
+      methods_tried <- c(methods_tried, ".Renviron")
+    }, error = function(e) {
+      methods_tried <- c(methods_tried, ".Renviron (failed)")
+    })
+  }
+
+  return(list(
+    success = success,
+    methods = methods_tried
+  ))
+}
+
 #' Generate environment report
 #' @param sys_config system configuration
 #' @return environment information
@@ -129,7 +206,15 @@ handle_library_path_configuration <- function(interactive, sys_config) {
         if (!is.null(new_path) && dir.exists(new_path)) {
           .libPaths(c(new_path, .libPaths()))
           cat(sprintf("已将 %s 添加为优先安装路径。\n", new_path))
-          cat("新安装的包将优先安装到此路径。\n\n")
+          cat("新安装的包将优先安装到此路径。\n")
+
+          # Make the configuration persistent across R sessions
+          persist_result <- persist_library_path(new_path)
+          if (persist_result$success) {
+            cat("✓ 路径已永久保存，重启R后仍然有效。\n\n")
+          } else {
+            cat("⚠ 注意：当前会话已生效，但重启R后需重新设置。\n\n")
+          }
         }
       } else {
         cat("未输入有效路径，程序已退出。\n")
