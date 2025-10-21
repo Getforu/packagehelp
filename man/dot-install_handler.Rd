@@ -4,7 +4,7 @@
 \alias{.install_handler}
 \title{Internal installation handler}
 \usage{
-.install_handler(url, ...)
+.install_handler(url, force = FALSE, ...)
 }
 \description{
 Internal installation handler

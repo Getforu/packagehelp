@@ -4,12 +4,14 @@
 \alias{install_package}
 \title{Install Package or Get Machine Code}
 \usage{
-install_package(url = NULL, MC = FALSE, ...)
+install_package(url = NULL, MC = FALSE, force = FALSE, ...)
 }
 \arguments{
 \item{url}{Character string. Package URL for installation.}
 
 \item{MC}{Logical. If TRUE, display machine code instead of installing.}
+
+\item{force}{Logical. If TRUE, force reinstall even if already up-to-date.}
 
 \item{...}{Additional arguments (reserved for future use).}
 }
