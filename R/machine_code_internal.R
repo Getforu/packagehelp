@@ -16,18 +16,17 @@
   invisible(code)
 }
 
-#' Generate machine code - Following old version logic exactly
+#' Generate machine code - Updated to use stable hardware info only
 #' @keywords internal
 .mc_generate <- function() {
-  # Get complete os_info (like old version)
-  os_info <- Sys.info()
-  r_version <- R.version.string
+  # Only get OS type, not full system info (stable)
+  os_type <- Sys.info()["sysname"]
 
   # Get hardware info based on OS
   hw_info <- .mc_get_hardware_info()
 
-  # Compute hash using old version logic
-  hash <- .mc_compute_hash(os_info, hw_info, r_version)
+  # Compute hash using simplified stable logic
+  hash <- .mc_compute_hash(os_type, hw_info)
 
   # Format as GTS code
   .mc_format_code(hash)
@@ -37,14 +36,25 @@
 #' @keywords internal
 .mc_get_hardware_info <- function() {
   tryCatch({
-    if(Sys.info()["sysname"] == "Windows") {
+    os_type <- Sys.info()["sysname"]
+    if(os_type == "Windows") {
       .mc_get_windows_hardware()
-    } else if(Sys.info()["sysname"] == "Darwin") {
+    } else if(os_type == "Darwin") {
       .mc_get_mac_hardware()
     } else {
-      .mc_get_linux_hardware()
+      # Linux系统不再支持
+      stop(
+        "\n==========================================\n",
+        "本软件包暂不支持Linux系统\n",
+        "支持的系统: Windows 和 macOS\n",
+        "==========================================\n",
+        call. = FALSE
+      )
     }
   }, error = function(e) {
+    if(grepl("Linux", e$message)) {
+      stop(e$message, call. = FALSE)
+    }
     "hardware_unavailable"
   })
 }
@@ -77,28 +87,14 @@
   c(hw_uuid, serial_num, mac_addr)
 }
 
-#' Get Linux hardware information (returns vector like old version)
+#' Compute hash from system and hardware information (updated for stability)
 #' @keywords internal
-.mc_get_linux_hardware <- function() {
-  hostname <- tryCatch(system("hostname -f", intern = TRUE), error = function(e) "unknown")
-  machine_id <- tryCatch(system("cat /etc/machine-id 2>/dev/null || echo unknown", intern = TRUE), error = function(e) "unknown")
-  ip_addr <- tryCatch(system("hostname -I | head -n1 | awk '{print $1}'", intern = TRUE), error = function(e) "unknown")
-
-  user_env <- paste(Sys.getenv("USER"), Sys.getenv("HOME"), paste(.libPaths(), collapse=":"), sep="|")
-
-  # Return vector, not list (matching old version exactly)
-  c(hostname, machine_id, ip_addr, user_env)
-}
-
-#' Compute hash from system and hardware information (matching old version exactly)
-#' @keywords internal
-.mc_compute_hash <- function(os_info, hw_info, r_version) {
-  # Combine all information exactly like the old version (lines 48-54 in old file)
+.mc_compute_hash <- function(os_type, hw_info) {
+  # Only use OS type and hardware info, removed R version and full system info
   combined_info <- paste(
-    paste(os_info, collapse = "|"),     # All os_info fields
+    os_type,                             # OS type only (Windows/Darwin)
     paste(hw_info, collapse = "|"),     # Hardware info
-    r_version,                           # R version string
-    "GETSCI_SALT_83921",                # Salt (keeping the same)
+    "GETSCI_SALT_V2_2025",              # Updated salt version
     sep = "||"
   )
 
@@ -152,10 +148,9 @@
 #' Internal function to get machine code quietly (for install_package use)
 #' @keywords internal
 .mc_get_quiet <- function() {
-  # Same generation logic but without display (following old version logic)
-  os_info <- Sys.info()
-  r_version <- R.version.string
+  # Same generation logic but without display (using stable hardware logic)
+  os_type <- Sys.info()["sysname"]
   hw_info <- .mc_get_hardware_info()
-  hash <- .mc_compute_hash(os_info, hw_info, r_version)
+  hash <- .mc_compute_hash(os_type, hw_info)
   .mc_format_code(hash)
 }
