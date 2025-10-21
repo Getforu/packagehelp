@@ -218,6 +218,16 @@ install_and_verify_package <- function(temp_file, package_name, lib_path, extrac
   # First, try standard R binary package installation
   tryCatch({
     sys_type <- Sys.info()[["sysname"]]
+
+    # Set platform-specific type parameter
+    pkg_type <- if (sys_type == "Windows") {
+      "win.binary"  # Windows-specific binary package type
+    } else if (sys_type == "Darwin") {
+      "mac.binary"  # macOS-specific binary package type
+    } else {
+      "binary"      # Generic binary (fallback)
+    }
+
     install_opts <- if (sys_type == "Windows") {
       c("--no-multiarch")
     } else {
@@ -227,7 +237,7 @@ install_and_verify_package <- function(temp_file, package_name, lib_path, extrac
     utils::install.packages(
       pkgs = temp_file,
       repos = NULL,
-      type = "binary",
+      type = pkg_type,
       lib = lib_path,
       quiet = TRUE,
       INSTALL_opts = install_opts
