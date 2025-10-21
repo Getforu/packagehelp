@@ -13,7 +13,7 @@ install_and_verify_package(temp_file, package_name, lib_path, extract_func)
 
 \item{lib_path}{path}
 
-\item{extract_func}{extraction function (deprecated, kept for compatibility)}
+\item{extract_func}{extraction function}
 }
 \value{
 TRUE

@@ -188,16 +188,21 @@ download_package_file <- function(download_url, os_type) {
 #' @param temp_file path
 #' @param package_name name of the package
 #' @param lib_path path
-#' @param extract_func extraction function (deprecated, kept for compatibility)
+#' @param extract_func extraction function
 #' @return TRUE
 #' @keywords internal
 install_and_verify_package <- function(temp_file, package_name, lib_path, extract_func) {
 
   # Remove existing package if present
-  if (package_name %in% rownames(installed.packages(lib.loc = lib_path))) {
+  target_dir <- file.path(lib_path, package_name)
+  if (dir.exists(target_dir)) {
     cat("发现现有包，正在删除...\n")
     tryCatch({
-      remove.packages(package_name, lib = lib_path)
+      unlink(target_dir, recursive = TRUE, force = TRUE)
+      if (dir.exists(target_dir)) {
+        # Try using remove.packages as fallback
+        remove.packages(package_name, lib = lib_path)
+      }
       cat("现有包删除成功。\n")
     }, error = function(e) {
       warning("删除现有包时出现警告：", e$message, "\n继续安装过程...\n", call. = FALSE)
@@ -206,12 +211,15 @@ install_and_verify_package <- function(temp_file, package_name, lib_path, extrac
 
   cat("正在安装包...\n")
 
-  # Use standard R package installation for binary packages
+  # Detect package format by attempting to inspect the archive
+  is_standard_binary <- FALSE
+  installation_success <- FALSE
+
+  # First, try standard R binary package installation
   tryCatch({
-    # Get system type to set platform-specific options
     sys_type <- Sys.info()[["sysname"]]
     install_opts <- if (sys_type == "Windows") {
-      c("--no-multiarch")  # Avoid multi-architecture issues on Windows
+      c("--no-multiarch")
     } else {
       c()
     }
@@ -221,18 +229,46 @@ install_and_verify_package <- function(temp_file, package_name, lib_path, extrac
       repos = NULL,
       type = "binary",
       lib = lib_path,
-      quiet = FALSE,
+      quiet = TRUE,
       INSTALL_opts = install_opts
     )
 
-    cat("安装成功！\n")
-
+    # Check if installation succeeded
+    if (package_name %in% rownames(installed.packages(lib.loc = lib_path))) {
+      is_standard_binary <- TRUE
+      installation_success <- TRUE
+      cat("安装成功（标准R包格式）！\n")
+    }
   }, error = function(e) {
-    stop("安装失败：", e$message, "\n请检查文件完整性或重试。", call. = FALSE)
+    # Standard installation failed, will try direct extraction
+    is_standard_binary <- FALSE
   })
 
-  # Verify installation
-  if (package_name %in% rownames(installed.packages(lib.loc = lib_path))) {
+  # If standard installation failed, try direct extraction (old method)
+  if (!installation_success) {
+    cat("尝试直接安装方式...\n")
+    tryCatch({
+      extract_func(temp_file, exdir = lib_path)
+
+      # Verify the package directory was created
+      if (dir.exists(target_dir)) {
+        desc_file <- file.path(target_dir, "DESCRIPTION")
+        if (file.exists(desc_file)) {
+          installation_success <- TRUE
+          cat("安装成功（直接安装格式）！\n")
+        } else {
+          stop("包结构不完整：缺少DESCRIPTION文件", call. = FALSE)
+        }
+      } else {
+        stop("安装失败：目标目录未创建", call. = FALSE)
+      }
+    }, error = function(e) {
+      stop("安装失败：", e$message, "\n请检查文件完整性或重试。", call. = FALSE)
+    })
+  }
+
+  # Final verification
+  if (installation_success) {
     tryCatch({
       library(package_name, character.only = TRUE)
       cat("验证成功，可以正常使用。\n")
@@ -241,7 +277,7 @@ install_and_verify_package <- function(temp_file, package_name, lib_path, extrac
       cat("这可能是正常的，请尝试重启R后使用。\n")
     })
   } else {
-    stop("安装失败：包未正确安装到指定路径", call. = FALSE)
+    stop("安装失败：未能通过任何安装方式完成安装", call. = FALSE)
   }
 
   return(TRUE)
