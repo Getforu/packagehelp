@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_compute_hash}
 \alias{.mc_compute_hash}
-\title{Compute hash from system and hardware information (matching old version exactly)}
+\title{Compute hash from system and hardware information (updated for stability)}
 \usage{
-.mc_compute_hash(os_info, hw_info, r_version)
+.mc_compute_hash(os_type, hw_info)
 }
 \description{
-Compute hash from system and hardware information (matching old version exactly)
+Compute hash from system and hardware information (updated for stability)
 }
 \keyword{internal}

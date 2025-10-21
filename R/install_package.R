@@ -188,48 +188,60 @@ download_package_file <- function(download_url, os_type) {
 #' @param temp_file path
 #' @param package_name name of the package
 #' @param lib_path path
-#' @param extract_func extraction function
+#' @param extract_func extraction function (deprecated, kept for compatibility)
 #' @return TRUE
 #' @keywords internal
 install_and_verify_package <- function(temp_file, package_name, lib_path, extract_func) {
-  target_dir <- file.path(lib_path, package_name)
 
   # Remove existing package if present
-  if (dir.exists(target_dir)) {
+  if (package_name %in% rownames(installed.packages(lib.loc = lib_path))) {
     cat("发现现有包，正在删除...\n")
-    unlink(target_dir, recursive = TRUE, force = TRUE)
-
-    if (dir.exists(target_dir)) {
-      stop("无法删除现有包，可能被占用。请重启R后重试。", call. = FALSE)
-    }
-    cat("现有包删除成功。\n")
+    tryCatch({
+      remove.packages(package_name, lib = lib_path)
+      cat("现有包删除成功。\n")
+    }, error = function(e) {
+      warning("删除现有包时出现警告：", e$message, "\n继续安装过程...\n", call. = FALSE)
+    })
   }
 
   cat("正在安装包...\n")
+
+  # Use standard R package installation for binary packages
   tryCatch({
-    extract_func(temp_file, exdir = lib_path)
+    # Get system type to set platform-specific options
+    sys_type <- Sys.info()[["sysname"]]
+    install_opts <- if (sys_type == "Windows") {
+      c("--no-multiarch")  # Avoid multi-architecture issues on Windows
+    } else {
+      c()
+    }
+
+    utils::install.packages(
+      pkgs = temp_file,
+      repos = NULL,
+      type = "binary",
+      lib = lib_path,
+      quiet = FALSE,
+      INSTALL_opts = install_opts
+    )
+
+    cat("安装成功！\n")
+
   }, error = function(e) {
-    stop("安装失败，请检查文件完整性或重试。", call. = FALSE)
+    stop("安装失败：", e$message, "\n请检查文件完整性或重试。", call. = FALSE)
   })
 
-  if (dir.exists(target_dir)) {
-    desc_file <- file.path(target_dir, "DESCRIPTION")
-    if (file.exists(desc_file)) {
-      cat("安装成功！\n")
-
-      tryCatch({
-        library(package_name, character.only = TRUE)
-        cat("验证成功，可以正常使用。\n")
-      }, error = function(e) {
-        cat("安装完成，但加载时出现警告。\n")
-        cat("这可能是正常的，请尝试重启R后重试。\n")
-      })
-
-    } else {
-      stop("安装失败：包结构不完整", call. = FALSE)
-    }
+  # Verify installation
+  if (package_name %in% rownames(installed.packages(lib.loc = lib_path))) {
+    tryCatch({
+      library(package_name, character.only = TRUE)
+      cat("验证成功，可以正常使用。\n")
+    }, error = function(e) {
+      cat("安装完成，但加载时出现警告。\n")
+      cat("这可能是正常的，请尝试重启R后使用。\n")
+    })
   } else {
-    stop("安装失败：目标目录未创建", call. = FALSE)
+    stop("安装失败：包未正确安装到指定路径", call. = FALSE)
   }
 
   return(TRUE)
