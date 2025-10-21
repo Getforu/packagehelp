@@ -18,14 +18,25 @@ detect_system_environment <- function() {
   sys <- Sys.info()[["sysname"]]
   if (sys == "Windows") {
     os_type <- "WIN"
-    extract_func <- unzip
   } else if (sys == "Darwin") {
     os_type <- "MAC"
-    extract_func <- function(file, exdir) {
-      untar(file, exdir = exdir, tar = "internal")
-    }
   } else {
     stop("当前仅支持Windows和macOS系统。", call. = FALSE)
+  }
+
+  # Smart extraction function that auto-detects format
+  extract_func <- function(file, exdir) {
+    file_ext <- tolower(tools::file_ext(file))
+
+    if (file_ext == "zip") {
+      # Use unzip for .zip files
+      unzip(file, exdir = exdir)
+    } else if (file_ext %in% c("tgz", "gz")) {
+      # Use untar for .tgz or .tar.gz files
+      untar(file, exdir = exdir, tar = "internal")
+    } else {
+      stop("不支持的压缩格式：", file_ext, call. = FALSE)
+    }
   }
 
   lib_path <- .libPaths()[1]
@@ -110,7 +121,20 @@ request_download_permission <- function(url, machine_code, os_type) {
 #' @return path
 #' @keywords internal
 download_package_file <- function(download_url, os_type) {
-  file_ext <- if (os_type == "MAC") ".tgz" else ".zip"
+  # Auto-detect file extension from URL
+  # Supports both .zip and .tgz/.tar.gz formats
+  url_ext <- tolower(tools::file_ext(download_url))
+
+  # Determine file extension based on URL
+  if (url_ext %in% c("zip")) {
+    file_ext <- ".zip"
+  } else if (url_ext %in% c("tgz", "gz")) {
+    file_ext <- ".tgz"
+  } else {
+    # Fallback: use platform default if extension unclear
+    file_ext <- if (os_type == "MAC") ".tgz" else ".zip"
+  }
+
   temp_file <- tempfile(fileext = file_ext)
   download_success <- FALSE
 
