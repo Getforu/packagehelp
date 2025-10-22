@@ -15,6 +15,7 @@ Thumbs.db
 # Build artifacts
 /*.tar.gz
 /*.zip
+build_package.R
 
 # IDE files
 .vscode/
