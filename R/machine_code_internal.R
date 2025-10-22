@@ -95,23 +95,25 @@
   c(hw_uuid, serial_num, mac_addr)
 }
 
-#' Check hardware info and show warning if failed
+#' Check hardware info and stop if failed
 #' @keywords internal
 .mc_check_hardware_warning <- function(os_type, hw_info, quiet = FALSE) {
   if(all(grepl("unknown", hw_info)) || identical(hw_info, "hardware_unavailable")) {
-    if(!quiet) {
-      cat("\n")
-      cat("==========================================\n")
-      cat("警告: 无法获取硬件信息\n")
-      cat("==========================================\n")
+    stop(
+      "\n==========================================\n",
+      "错误: 无法获取硬件信息\n",
+      "==========================================\n",
       if(os_type == "Windows") {
-        cat("建议: 请右键以管理员模式运行RStudio\n")
+        "解决方法:\n1. 请右键以管理员模式运行RStudio\n2. 确保有足够的系统权限\n"
       } else if(os_type == "Darwin") {
-        cat("建议: 请在系统弹窗中允许访问硬件信息\n")
-        cat("或在「系统偏好设置 > 安全性与隐私」中授权\n")
-      }
-      cat("==========================================\n\n")
-    }
+        "解决方法:\n1. 请在系统弹窗中允许访问硬件信息\n2. 或在「系统偏好设置 > 安全性与隐私」中授权\n"
+      } else {
+        ""
+      },
+      "\n如仍无法解决，请联系客服协助。\n",
+      "==========================================\n",
+      call. = FALSE
+    )
   }
 }
 
