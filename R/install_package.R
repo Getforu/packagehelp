@@ -304,7 +304,9 @@ download_package_file <- function(download_url, os_type) {
       options(download.file.method = "libcurl")
       Sys.setenv(CURL_CA_BUNDLE = "")
 
-      utils::download.file(download_url, temp_file, mode = "wb", quiet = TRUE)
+      suppressWarnings(
+        utils::download.file(download_url, temp_file, mode = "wb", quiet = TRUE)
+      )
 
       if (!is.null(old_method)) options(download.file.method = old_method)
       Sys.setenv(CURL_CA_BUNDLE = old_ca_bundle)
