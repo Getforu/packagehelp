@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_get_mac_hardware}
 \alias{.mc_get_mac_hardware}
-\title{Get Mac hardware information (returns vector like old version)}
+\title{Get Mac hardware information (returns vector)}
 \usage{
 .mc_get_mac_hardware()
 }
 \description{
-Get Mac hardware information (returns vector like old version)
+Get Mac hardware information (returns vector)
 }
 \keyword{internal}

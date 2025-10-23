@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_generate}
 \alias{.mc_generate}
-\title{Generate machine code - Updated to use stable hardware info only}
+\title{Generate machine code - Enhanced with UUID and system identifiers}
 \usage{
 .mc_generate()
 }
 \description{
-Generate machine code - Updated to use stable hardware info only
+Generate machine code - Enhanced with UUID and system identifiers
 }
 \keyword{internal}

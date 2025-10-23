@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_get_windows_hardware}
 \alias{.mc_get_windows_hardware}
-\title{Get Windows hardware information (returns vector like old version)}
+\title{Get Windows hardware information (returns vector)}
 \usage{
 .mc_get_windows_hardware()
 }
 \description{
-Get Windows hardware information (returns vector like old version)
+Get Windows hardware information (returns vector)
 }
 \keyword{internal}
