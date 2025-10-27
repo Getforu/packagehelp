@@ -108,6 +108,20 @@ classify_install_error <- function(error_msg, pkg_name = "", recommended_version
 install_package_with_retry <- function(pkg_name, recommended_version, pkg_type = "binary",
                                        max_retries = 3, timeout = NULL) {
 
+  # Unload package if currently loaded (prevent RStudio "Updating Loaded Packages" dialog)
+  if (pkg_name %in% loadedNamespaces()) {
+    tryCatch({
+      # Try to detach if attached
+      if (paste0("package:", pkg_name) %in% search()) {
+        detach(paste0("package:", pkg_name), character.only = TRUE, unload = TRUE, force = TRUE)
+      }
+      # Unload namespace
+      unloadNamespace(pkg_name)
+    }, error = function(e) {
+      # Silently continue if unload fails
+    })
+  }
+
   # Determine timeout based on package size estimation
   if (is.null(timeout)) {
     # Large packages that typically need more time
@@ -228,6 +242,9 @@ install_package_with_retry <- function(pkg_name, recommended_version, pkg_type =
 #' @return analysis
 #' @keywords internal
 analyze_package_status <- function(package_defs) {
+  # Define critical packages that need strict version control
+  critical_packages <- c("ggplot2", "dplyr", "tidyr", "rms")
+
   r_version <- getRversion()
   version_ok <- compareVersion(as.character(r_version), package_defs$min_r_version) >= 0
 
@@ -253,6 +270,7 @@ analyze_package_status <- function(package_defs) {
   installed_essential <- c()
   missing_essential <- c()
   outdated_essential <- c()
+  higher_version_essential <- list()  # Store packages with higher versions
 
   for (pkg_name in names(package_defs$essential_packages)) {
     recommended_version <- package_defs$essential_packages[[pkg_name]]
@@ -265,9 +283,19 @@ analyze_package_status <- function(package_defs) {
       version_comparison <- compareVersion(current_version, recommended_version)
 
       if (version_comparison < 0) {
+        # Lower version - needs update
         outdated_essential <- c(outdated_essential, pkg_name)
         installed_essential <- c(installed_essential, pkg_name)
+      } else if (version_comparison > 0) {
+        # Higher version - store for warning
+        higher_version_essential[[pkg_name]] <- list(
+          current = current_version,
+          recommended = recommended_version,
+          is_critical = pkg_name %in% critical_packages
+        )
+        installed_essential <- c(installed_essential, pkg_name)
       } else {
+        # Exact match
         installed_essential <- c(installed_essential, pkg_name)
       }
     }
@@ -285,6 +313,22 @@ analyze_package_status <- function(package_defs) {
     }
   }
 
+  # Display warning for higher version packages
+  if (length(higher_version_essential) > 0) {
+    cat(sprintf("\n⚠ 检测到 %d 个包版本高于推荐版本：\n", length(higher_version_essential)))
+    for (pkg_name in names(higher_version_essential)) {
+      pkg_info <- higher_version_essential[[pkg_name]]
+      cat(sprintf("  - %s: 当前 %s，推荐 %s",
+                  pkg_name, pkg_info$current, pkg_info$recommended))
+      if (pkg_info$is_critical) {
+        cat(" [关键包]")
+      }
+      cat("\n")
+    }
+    cat("说明：高版本包可能存在兼容性风险\n")
+    cat("提示：如遇兼容性问题，可在安装时选择降级到推荐版本\n")
+  }
+
   cat("-----------------------------------\n")
 
   packages_to_install <- c(missing_essential, outdated_essential)
@@ -295,6 +339,7 @@ analyze_package_status <- function(package_defs) {
     installed_essential = installed_essential,
     missing_essential = missing_essential,
     outdated_essential = outdated_essential,
+    higher_version_essential = higher_version_essential,  # Add to return
     packages_to_install = packages_to_install
   ))
 }
@@ -331,6 +376,45 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
       } else {
         cat("安装已取消，程序已退出。\n")
         return(list(status = "cancelled"))
+      }
+    }
+
+    # Handle higher version packages if any
+    higher_version_essential <- pkg_analysis$higher_version_essential
+    downgrade_packages <- c()
+
+    if (interactive && length(higher_version_essential) > 0) {
+      critical_higher <- sapply(higher_version_essential, function(x) x$is_critical)
+      if (any(critical_higher)) {
+        cat("\n=== 版本兼容性确认 ===\n")
+        cat("检测到以下关键包版本高于推荐版本：\n\n")
+
+        for (pkg_name in names(higher_version_essential)[critical_higher]) {
+          pkg_info <- higher_version_essential[[pkg_name]]
+          cat(sprintf("【%s】\n", pkg_name))
+          cat(sprintf("  当前版本：%s\n", pkg_info$current))
+          cat(sprintf("  推荐版本：%s\n", pkg_info$recommended))
+          cat(sprintf("  说明：本包基于 %s %s 开发和测试，使用其他版本可能存在兼容性风险\n",
+                      pkg_name, pkg_info$recommended))
+          cat("\n")
+
+          choice <- readline(sprintf("是否将 %s 降级到推荐版本 %s？(Y/N): ",
+                                    pkg_name, pkg_info$recommended))
+          if (tolower(choice) %in% c("y", "yes")) {
+            downgrade_packages <- c(downgrade_packages, pkg_name)
+          } else {
+            cat(sprintf("已保留 %s 当前版本 %s\n", pkg_name, pkg_info$current))
+            cat(sprintf("  提示：如遇兼容性问题，可运行以下命令降级：\n"))
+            cat(sprintf("  remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)\n\n",
+                        pkg_name, pkg_info$recommended))
+          }
+        }
+      }
+
+      # Add downgrade packages to installation list
+      if (length(downgrade_packages) > 0) {
+        packages_to_install <- c(packages_to_install, downgrade_packages)
+        cat(sprintf("\n将降级 %d 个包到推荐版本\n", length(downgrade_packages)))
       }
     }
 

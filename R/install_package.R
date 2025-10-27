@@ -1,9 +1,13 @@
 #' Check package version and compare with server
 #' @param package_name Package name
 #' @param server_version Server version from download info
+#' @param url Original URL for reinstall command
 #' @return list with version comparison result
 #' @keywords internal
-check_package_version <- function(package_name, server_version) {
+check_package_version <- function(package_name, server_version, url = NULL) {
+  # Define critical packages that need strict version control
+  critical_packages <- c("ggplot2", "dplyr", "tidyr", "rms")
+
   # Get locally installed version
   local_version <- tryCatch({
     as.character(packageVersion(package_name))
@@ -30,15 +34,32 @@ check_package_version <- function(package_name, server_version) {
       need_install = FALSE,
       local_version = local_version,
       server_version = server_version,
-      message = sprintf("✓ 已安装最新版本 %s，无需重复安装", local_version)
+      message = sprintf("✓ 已安装推荐版本 %s，无需重复安装", local_version)
     ))
   } else if (local_ver > server_ver) {
+    # Higher version detected - show warning but don't force downgrade
+    warning_msg <- sprintf("⚠ 本地版本 %s 高于推荐版本 %s", local_version, server_version)
+
+    if (package_name %in% critical_packages) {
+      reinstall_cmd <- if (!is.null(url)) {
+        sprintf('install_package("%s", force = TRUE)', url)
+      } else {
+        sprintf('install_package("<url>", force = TRUE)  # 请替换<url>为实际地址')
+      }
+      warning_msg <- paste0(warning_msg,
+                           sprintf("\n  说明：本包基于 %s %s 开发和测试，使用其他版本可能存在兼容性风险",
+                                   package_name, server_version),
+                           sprintf("\n  提示：如遇兼容性问题，可使用以下命令降级到推荐版本：\n  %s",
+                                   reinstall_cmd))
+    }
+
     return(list(
       installed = TRUE,
       need_install = FALSE,
       local_version = local_version,
       server_version = server_version,
-      message = sprintf("✓ 本地版本 %s 高于服务器版本 %s，无需安装", local_version, server_version)
+      is_higher = TRUE,
+      message = warning_msg
     ))
   } else {
     # local_ver < server_ver - update available
@@ -48,7 +69,7 @@ check_package_version <- function(package_name, server_version) {
       local_version = local_version,
       server_version = server_version,
       is_update = TRUE,
-      message = sprintf("发现新版本 %s (当前: %s)", server_version, local_version)
+      message = sprintf("发现新版本 %s (当前: %s)，将自动升级", server_version, local_version)
     ))
   }
 }
@@ -288,13 +309,11 @@ download_package_file <- function(download_url, os_type) {
         }
       }
     }, error = function(e) {
-      cat("下载失败，尝试备用方案...\n")
+      # Silent fallback to alternative method
     })
   }
 
   if (!download_success) {
-    cat("使用备用方案下载...\n")
-
     if (file.exists(temp_file)) file.remove(temp_file)
 
     tryCatch({
@@ -313,7 +332,7 @@ download_package_file <- function(download_url, os_type) {
 
       if (file.exists(temp_file) && file.size(temp_file) > 1000) {
         download_success <- TRUE
-        cat("备用方案下载成功！\n")
+        cat("文件下载成功！\n")
       }
     }, error = function(e) {
       if (!is.null(old_method)) options(download.file.method = old_method)
@@ -350,6 +369,22 @@ download_package_file <- function(download_url, os_type) {
 #' @return TRUE
 #' @keywords internal
 install_and_verify_package <- function(temp_file, package_name, lib_path, extract_func) {
+
+  # Unload package if currently loaded (prevent RStudio "Updating Loaded Packages" dialog)
+  if (package_name %in% loadedNamespaces()) {
+    cat("检测到包已加载，正在卸载...\n")
+    tryCatch({
+      # Try to detach if attached
+      if (paste0("package:", package_name) %in% search()) {
+        detach(paste0("package:", package_name), character.only = TRUE, unload = TRUE, force = TRUE)
+      }
+      # Unload namespace
+      unloadNamespace(package_name)
+      cat("包已卸载。\n")
+    }, error = function(e) {
+      cat("警告：无法完全卸载包，继续安装...\n")
+    })
+  }
 
   # Remove existing package if present
   target_dir <- file.path(lib_path, package_name)
@@ -397,13 +432,19 @@ install_and_verify_package <- function(temp_file, package_name, lib_path, extrac
     stop(error_info$message, call. = FALSE)
   })
 
-  # Final verification - load the package
+  # Final verification - check if package can be loaded
   tryCatch({
-    library(package_name, character.only = TRUE)
-    cat("验证成功，可以正常使用。\n")
+    # Use requireNamespace instead of library to avoid loading the package
+    if (requireNamespace(package_name, quietly = TRUE)) {
+      cat("验证成功，可以正常使用。\n")
+      cat("提示：包已安装但未加载，使用时请先运行 library(", package_name, ")\n", sep = "")
+    } else {
+      cat("安装完成，但验证时出现问题。\n")
+      cat("请尝试重启R后使用。\n")
+    }
   }, error = function(e) {
-    cat("安装完成，但加载时出现警告。\n")
-    cat("这可能是正常的，请尝试重启R后使用。\n")
+    cat("安装完成，但验证时出现问题。\n")
+    cat("请尝试重启R后使用。\n")
   })
 
   return(TRUE)
@@ -454,7 +495,7 @@ install_package <- function(url = NULL, MC = FALSE, force = FALSE, ...) {
   download_info <- request_download_permission(complete_url, mcode, sys_env$os_type)
 
   # Check version before downloading
-  version_check <- check_package_version(download_info$package_name, download_info$version)
+  version_check <- check_package_version(download_info$package_name, download_info$version, url)
 
   cat("\n")
   cat(version_check$message, "\n")
