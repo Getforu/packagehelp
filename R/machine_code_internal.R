@@ -72,6 +72,20 @@
 #' Get Windows hardware information (returns vector)
 #' @keywords internal
 .mc_get_windows_hardware <- function() {
+  # Get MachineGuid (most stable, doesn't require admin)
+  machine_guid <- tryCatch({
+    system("reg query HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid", intern = TRUE)
+  }, error = function(e) NULL)
+
+  guid_val <- if(length(machine_guid) > 0) {
+    guid_line <- machine_guid[grepl("MachineGuid", machine_guid)]
+    if(length(guid_line) > 0) {
+      guid_match <- regmatches(guid_line, regexpr("[A-Fa-f0-9-]{36}", guid_line))
+      if(length(guid_match) > 0) guid_match[1] else "unknown"
+    } else "unknown"
+  } else "unknown"
+
+  # Get wmic hardware info
   motherboard <- system("wmic baseboard get serialnumber", intern = TRUE)
   disk <- system("wmic diskdrive get serialnumber", intern = TRUE)
   cpu <- system("wmic cpu get processorid", intern = TRUE)
@@ -82,7 +96,7 @@
   cpu_id <- if(length(cpu) > 1) trimws(cpu[2]) else "unknown"
   mac_addr <- if(length(mac) > 0) mac[1] else "unknown"
 
-  c(mb_serial, disk_serial, cpu_id, mac_addr)
+  c(mb_serial, disk_serial, cpu_id, mac_addr, guid_val)
 }
 
 #' Get Mac hardware information (returns vector)
@@ -95,14 +109,18 @@
   c(hw_uuid, serial_num, mac_addr)
 }
 
-#' Check hardware info and stop if failed
+#' Check hardware info and stop if insufficient
 #' @keywords internal
 .mc_check_hardware_warning <- function(os_type, hw_info, quiet = FALSE) {
-  if(all(grepl("unknown", hw_info)) || identical(hw_info, "hardware_unavailable")) {
+  # Count successful hardware info retrieval
+  success_count <- sum(!grepl("unknown", hw_info) & hw_info != "hardware_unavailable")
+
+  if(success_count < 2) {
     stop(
       "\n==========================================\n",
-      "错误: 无法获取硬件信息\n",
+      "错误: 硬件信息获取不足\n",
       "==========================================\n",
+      sprintf("成功获取: %d 项，需要: 至少 2 项\n", success_count),
       if(os_type == "Windows") {
         "解决方法:\n1. 请右键以管理员模式运行RStudio\n2. 确保有足够的系统权限\n"
       } else if(os_type == "Darwin") {

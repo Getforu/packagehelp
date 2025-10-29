@@ -17,6 +17,9 @@ Thumbs.db
 /*.zip
 build_package.R
 
+# Diagnostic scripts (for internal testing only)
+hardware_diagnostic.R
+
 # IDE files
 .vscode/
 .idea/
