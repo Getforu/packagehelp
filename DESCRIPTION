@@ -1,7 +1,7 @@
 Package: packagehelp
 Type: Package
 Title: R Package Installation Helper
-Version: 0.1.1
+Version: 0.1.3
 Authors@R: c(
     person("packagehelp", "Team", email = "packagehelpexample@mailxxx.com", role = c("aut", "cre")))
 Description: A helper package.
