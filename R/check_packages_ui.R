@@ -252,8 +252,8 @@ install_optional_packages <- function(optional_packages, interactive) {
 
   # Helper function to check package status
   check_package_status <- function(pkg_name, recommended_version) {
-    # Define critical packages that need strict version control
-    critical_packages <- c("ggplot2", "dplyr", "tidyr", "rms")
+    # Define critical packages that need STRICT version control
+    critical_packages <- c("ggplot2", "rms")
 
     if (!requireNamespace(pkg_name, quietly = TRUE)) {
       return(list(status = "not_installed", action = "install"))
@@ -273,13 +273,9 @@ install_optional_packages <- function(optional_packages, interactive) {
                    action = "skip",
                    current_version = current_version,
                    recommended_version = recommended_version))
-      } else if (version_compare < 0) {
-        return(list(status = "loaded_outdated",
-                   action = "skip",
-                   current_version = current_version,
-                   recommended_version = recommended_version))
-      } else if (version_compare > 0) {
-        return(list(status = "loaded_higher",
+      } else if (version_compare != 0) {
+        # Version mismatch while loaded
+        return(list(status = "loaded_version_mismatch",
                    action = "skip",
                    current_version = current_version,
                    recommended_version = recommended_version,
@@ -289,23 +285,19 @@ install_optional_packages <- function(optional_packages, interactive) {
       }
     }
 
-    # Package installed but not loaded
+    # Package installed but not loaded - check version
     version_compare <- tryCatch({
       compareVersion(current_version, recommended_version)
     }, error = function(e) NA)
 
     if (is.na(version_compare)) {
       return(list(status = "unknown_version",
-                 action = "suggest_reinstall",
+                 action = "skip",
                  current_version = current_version,
                  recommended_version = recommended_version))
-    } else if (version_compare < 0) {
-      return(list(status = "outdated",
-                 action = "update",
-                 current_version = current_version,
-                 recommended_version = recommended_version))
-    } else if (version_compare > 0) {
-      return(list(status = "higher_version",
+    } else if (version_compare != 0) {
+      # Version mismatch - different handling for critical vs non-critical
+      return(list(status = "version_mismatch",
                  action = "skip",
                  current_version = current_version,
                  recommended_version = recommended_version,
@@ -351,10 +343,8 @@ install_optional_packages <- function(optional_packages, interactive) {
 
       # Analyze package status first
       packages_to_install <- list()
-      packages_to_update <- list()
       packages_loaded <- list()
-      packages_unknown_version <- list()
-      packages_higher_version <- list()  # New: track higher version packages
+      packages_version_mismatch <- list()  # Packages with version mismatch (not loaded)
       packages_skipped <- 0
 
       for (pkg_name in names(all_optional)) {
@@ -363,33 +353,17 @@ install_optional_packages <- function(optional_packages, interactive) {
 
         if (status$action == "install") {
           packages_to_install[[pkg_name]] <- recommended_version
-        } else if (status$action == "update") {
-          packages_to_update[[pkg_name]] <- list(
-            recommended = recommended_version,
-            current = status$current_version
-          )
-        } else if (status$status %in% c("loaded_outdated", "loaded_unknown_version")) {
-          packages_loaded[[pkg_name]] <- list(
-            recommended = recommended_version,
-            current = status$current_version
-          )
-        } else if (status$status == "loaded_higher") {
+        } else if (status$status %in% c("loaded_unknown_version", "loaded_version_mismatch")) {
           packages_loaded[[pkg_name]] <- list(
             recommended = recommended_version,
             current = status$current_version,
-            is_higher = TRUE,
-            is_critical = status$is_critical
+            is_critical = if (!is.null(status$is_critical)) status$is_critical else FALSE
           )
-        } else if (status$status == "higher_version") {
-          packages_higher_version[[pkg_name]] <- list(
+        } else if (status$status %in% c("unknown_version", "version_mismatch")) {
+          packages_version_mismatch[[pkg_name]] <- list(
             recommended = recommended_version,
             current = status$current_version,
-            is_critical = status$is_critical
-          )
-        } else if (status$action == "suggest_reinstall") {
-          packages_unknown_version[[pkg_name]] <- list(
-            recommended = recommended_version,
-            current = status$current_version
+            is_critical = if (!is.null(status$is_critical)) status$is_critical else FALSE
           )
         } else {
           packages_skipped <- packages_skipped + 1
@@ -399,28 +373,22 @@ install_optional_packages <- function(optional_packages, interactive) {
       # Report analysis results
       cat("\n分析结果：\n")
       if (packages_skipped > 0) {
-        cat(sprintf("  - 已是最新：%d 个包\n", packages_skipped))
+        cat(sprintf("  - 已是推荐版本：%d 个包\n", packages_skipped))
       }
       if (length(packages_to_install) > 0) {
         cat(sprintf("  - 需要安装：%d 个包\n", length(packages_to_install)))
       }
-      if (length(packages_to_update) > 0) {
-        cat(sprintf("  - 需要更新：%d 个包\n", length(packages_to_update)))
-      }
       if (length(packages_loaded) > 0) {
-        cat(sprintf("  - 已加载无法更新：%d 个包\n", length(packages_loaded)))
+        cat(sprintf("  - 已加载（版本不一致）：%d 个包\n", length(packages_loaded)))
       }
-      if (length(packages_unknown_version) > 0) {
-        cat(sprintf("  - 版本无法判断：%d 个包\n", length(packages_unknown_version)))
-      }
-      if (length(packages_higher_version) > 0) {
-        cat(sprintf("  - ⚠ 版本高于推荐：%d 个包\n", length(packages_higher_version)))
+      if (length(packages_version_mismatch) > 0) {
+        cat(sprintf("  - ℹ 版本不一致（未加载）：%d 个包\n", length(packages_version_mismatch)))
       }
 
-      # Process packages to install/update
-      total_to_process <- length(packages_to_install) + length(packages_to_update)
+      # Process packages to install
+      total_to_process <- length(packages_to_install)
       if (total_to_process > 0) {
-        cat(sprintf("\n开始处理 %d 个需要安装/更新的包...\n", total_to_process))
+        cat(sprintf("\n开始安装 %d 个缺失的包...\n", total_to_process))
         cat("提示：安装过程会自动处理网络超时和重试，请耐心等待\n\n")
 
         # Start timing
@@ -458,36 +426,6 @@ install_optional_packages <- function(optional_packages, interactive) {
           }
         }
 
-        # Update outdated packages
-        for (pkg_name in names(packages_to_update)) {
-          pkg_counter <- pkg_counter + 1
-          pkg_info <- packages_to_update[[pkg_name]]
-          cat(sprintf("[%d/%d] 更新 %s (%s -> %s)...",
-                     pkg_counter, total_to_process, pkg_name,
-                     pkg_info$current, pkg_info$recommended))
-
-          install_result <- install_or_update_package(pkg_name, pkg_info$recommended, "update")
-
-          if (install_result$success) {
-            retry_info <- if (!is.null(install_result$attempt) && install_result$attempt > 1) {
-              sprintf(" (第%d次尝试成功)", install_result$attempt)
-            } else {
-              ""
-            }
-            cat(sprintf(" 完成%s\n", retry_info))
-          } else {
-            error_info <- classify_install_error(install_result$error, pkg_name, pkg_info$recommended)
-            cat(sprintf(" 失败 (%s)\n", error_info$type_cn))
-            failed_optional[[pkg_name]] <- list(
-              error_type = error_info$type,
-              error_type_cn = error_info$type_cn,
-              suggestion = error_info$suggestion,
-              recommended_version = pkg_info$recommended,
-              manual_command = error_info$manual_command
-            )
-          }
-        }
-
         # Calculate elapsed time
         end_time <- Sys.time()
         elapsed_time <- difftime(end_time, start_time, units = "secs")
@@ -507,30 +445,11 @@ install_optional_packages <- function(optional_packages, interactive) {
         }
       }
 
-      # Report loaded packages that need update
+      # Report loaded packages with version mismatch
       if (length(packages_loaded) > 0) {
-        cat("\n以下包已加载，无法更新（需重启R后更新）：\n")
+        cat("\n以下包已加载，版本不一致（需重启R后处理）：\n")
         for (pkg_name in names(packages_loaded)) {
           pkg_info <- packages_loaded[[pkg_name]]
-          if (isTRUE(pkg_info$is_higher)) {
-            cat(sprintf("  - %s: 当前 %s，推荐 %s [版本较高]",
-                       pkg_name, pkg_info$current, pkg_info$recommended))
-            if (isTRUE(pkg_info$is_critical)) {
-              cat(" [关键包]")
-            }
-            cat("\n")
-          } else {
-            cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
-                       pkg_name, pkg_info$current, pkg_info$recommended))
-          }
-        }
-      }
-
-      # Report packages with higher version
-      if (length(packages_higher_version) > 0) {
-        cat("\n⚠ 以下包版本高于推荐版本：\n")
-        for (pkg_name in names(packages_higher_version)) {
-          pkg_info <- packages_higher_version[[pkg_name]]
           cat(sprintf("  - %s: 当前 %s，推荐 %s",
                      pkg_name, pkg_info$current, pkg_info$recommended))
           if (isTRUE(pkg_info$is_critical)) {
@@ -538,26 +457,34 @@ install_optional_packages <- function(optional_packages, interactive) {
           }
           cat("\n")
         }
-        cat("说明：高版本包可能存在兼容性风险\n")
-        cat("提示：如遇兼容性问题，可运行以下命令降级：\n")
-        for (pkg_name in names(packages_higher_version)) {
-          pkg_info <- packages_higher_version[[pkg_name]]
-          if (isTRUE(pkg_info$is_critical)) {
-            cat(sprintf("  remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)\n",
-                       pkg_name, pkg_info$recommended))
-          }
-        }
       }
 
-      # Report packages with unknown version
-      if (length(packages_unknown_version) > 0) {
-        cat("\n以下包版本无法判断，建议卸载后重新安装：\n")
-        for (pkg_name in names(packages_unknown_version)) {
-          pkg_info <- packages_unknown_version[[pkg_name]]
-          cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
-                     pkg_name, pkg_info$current, pkg_info$recommended))
+      # Report non-loaded packages with version mismatch
+      if (length(packages_version_mismatch) > 0) {
+        # Separate critical and non-critical
+        critical_mismatches <- names(packages_version_mismatch)[sapply(packages_version_mismatch, function(x) isTRUE(x$is_critical))]
+        non_critical_mismatches <- setdiff(names(packages_version_mismatch), critical_mismatches)
+
+        if (length(critical_mismatches) > 0) {
+          cat("\n⚠⚠⚠ 关键包版本不一致警告 ⚠⚠⚠\n")
+          cat("以下包使用其他版本可能存在兼容性风险，建议卸载后重新安装指定版本：\n")
+          for (pkg_name in critical_mismatches) {
+            pkg_info <- packages_version_mismatch[[pkg_name]]
+            cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
+                       pkg_name, pkg_info$current, pkg_info$recommended))
+            cat(sprintf("    卸载命令：remove.packages(\"%s\")\n", pkg_name))
+          }
         }
-        cat("使用 remove.packages(\"包名\") 卸载，然后重新运行安装\n")
+
+        if (length(non_critical_mismatches) > 0) {
+          cat("\nℹ 以下包版本与推荐版本不一致：\n")
+          for (pkg_name in non_critical_mismatches) {
+            pkg_info <- packages_version_mismatch[[pkg_name]]
+            cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
+                       pkg_name, pkg_info$current, pkg_info$recommended))
+          }
+          cat("提示：如遇兼容性问题，建议更新R包为推荐版本或联系客服\n")
+        }
       }
     } else if (toupper(choice) == "B") {
       cat("请选择要安装的功能包类别（可多选）：\n")
@@ -581,10 +508,8 @@ install_optional_packages <- function(optional_packages, interactive) {
 
           # Analyze package status first
           packages_to_install <- list()
-          packages_to_update <- list()
           packages_loaded <- list()
-          packages_unknown_version <- list()
-          packages_higher_version <- list()  # New: track higher version packages
+          packages_version_mismatch <- list()
           packages_skipped <- 0
 
           for (pkg_name in names(selected_packages)) {
@@ -593,33 +518,17 @@ install_optional_packages <- function(optional_packages, interactive) {
 
             if (status$action == "install") {
               packages_to_install[[pkg_name]] <- recommended_version
-            } else if (status$action == "update") {
-              packages_to_update[[pkg_name]] <- list(
-                recommended = recommended_version,
-                current = status$current_version
-              )
-            } else if (status$status %in% c("loaded_outdated", "loaded_unknown_version")) {
-              packages_loaded[[pkg_name]] <- list(
-                recommended = recommended_version,
-                current = status$current_version
-              )
-            } else if (status$status == "loaded_higher") {
+            } else if (status$status %in% c("loaded_unknown_version", "loaded_version_mismatch")) {
               packages_loaded[[pkg_name]] <- list(
                 recommended = recommended_version,
                 current = status$current_version,
-                is_higher = TRUE,
-                is_critical = status$is_critical
+                is_critical = if (!is.null(status$is_critical)) status$is_critical else FALSE
               )
-            } else if (status$status == "higher_version") {
-              packages_higher_version[[pkg_name]] <- list(
+            } else if (status$status %in% c("unknown_version", "version_mismatch")) {
+              packages_version_mismatch[[pkg_name]] <- list(
                 recommended = recommended_version,
                 current = status$current_version,
-                is_critical = status$is_critical
-              )
-            } else if (status$action == "suggest_reinstall") {
-              packages_unknown_version[[pkg_name]] <- list(
-                recommended = recommended_version,
-                current = status$current_version
+                is_critical = if (!is.null(status$is_critical)) status$is_critical else FALSE
               )
             } else {
               packages_skipped <- packages_skipped + 1
@@ -629,28 +538,22 @@ install_optional_packages <- function(optional_packages, interactive) {
           # Report analysis results
           cat("\n分析结果：\n")
           if (packages_skipped > 0) {
-            cat(sprintf("  - 已是最新：%d 个包\n", packages_skipped))
+            cat(sprintf("  - 已是推荐版本：%d 个包\n", packages_skipped))
           }
           if (length(packages_to_install) > 0) {
             cat(sprintf("  - 需要安装：%d 个包\n", length(packages_to_install)))
           }
-          if (length(packages_to_update) > 0) {
-            cat(sprintf("  - 需要更新：%d 个包\n", length(packages_to_update)))
-          }
           if (length(packages_loaded) > 0) {
-            cat(sprintf("  - 已加载无法更新：%d 个包\n", length(packages_loaded)))
+            cat(sprintf("  - 已加载（版本不一致）：%d 个包\n", length(packages_loaded)))
           }
-          if (length(packages_unknown_version) > 0) {
-            cat(sprintf("  - 版本无法判断：%d 个包\n", length(packages_unknown_version)))
-          }
-          if (length(packages_higher_version) > 0) {
-            cat(sprintf("  - ⚠ 版本高于推荐：%d 个包\n", length(packages_higher_version)))
+          if (length(packages_version_mismatch) > 0) {
+            cat(sprintf("  - ℹ 版本不一致（未加载）：%d 个包\n", length(packages_version_mismatch)))
           }
 
-          # Process packages to install/update
-          total_to_process <- length(packages_to_install) + length(packages_to_update)
+          # Process packages to install
+          total_to_process <- length(packages_to_install)
           if (total_to_process > 0) {
-            cat(sprintf("\n开始处理 %d 个需要安装/更新的包...\n", total_to_process))
+            cat(sprintf("\n开始安装 %d 个缺失的包...\n", total_to_process))
             cat("提示：安装过程会自动处理网络超时和重试，请耐心等待\n\n")
 
             # Start timing
@@ -688,36 +591,6 @@ install_optional_packages <- function(optional_packages, interactive) {
               }
             }
 
-            # Update outdated packages
-            for (pkg_name in names(packages_to_update)) {
-              pkg_counter <- pkg_counter + 1
-              pkg_info <- packages_to_update[[pkg_name]]
-              cat(sprintf("[%d/%d] 更新 %s (%s -> %s)...",
-                         pkg_counter, total_to_process, pkg_name,
-                         pkg_info$current, pkg_info$recommended))
-
-              install_result <- install_or_update_package(pkg_name, pkg_info$recommended, "update")
-
-              if (install_result$success) {
-                retry_info <- if (!is.null(install_result$attempt) && install_result$attempt > 1) {
-                  sprintf(" (第%d次尝试成功)", install_result$attempt)
-                } else {
-                  ""
-                }
-                cat(sprintf(" 完成%s\n", retry_info))
-              } else {
-                error_info <- classify_install_error(install_result$error, pkg_name, pkg_info$recommended)
-                cat(sprintf(" 失败 (%s)\n", error_info$type_cn))
-                failed_optional_custom[[pkg_name]] <- list(
-                  error_type = error_info$type,
-                  error_type_cn = error_info$type_cn,
-                  suggestion = error_info$suggestion,
-                  recommended_version = pkg_info$recommended,
-                  manual_command = error_info$manual_command
-                )
-              }
-            }
-
             # Calculate elapsed time
             end_time <- Sys.time()
             elapsed_time <- difftime(end_time, start_time, units = "secs")
@@ -737,30 +610,11 @@ install_optional_packages <- function(optional_packages, interactive) {
             }
           }
 
-          # Report loaded packages that need update
+          # Report loaded packages with version mismatch
           if (length(packages_loaded) > 0) {
-            cat("\n以下包已加载，无法更新（需重启R后更新）：\n")
+            cat("\n以下包已加载，版本不一致（需重启R后处理）：\n")
             for (pkg_name in names(packages_loaded)) {
               pkg_info <- packages_loaded[[pkg_name]]
-              if (isTRUE(pkg_info$is_higher)) {
-                cat(sprintf("  - %s: 当前 %s，推荐 %s [版本较高]",
-                           pkg_name, pkg_info$current, pkg_info$recommended))
-                if (isTRUE(pkg_info$is_critical)) {
-                  cat(" [关键包]")
-                }
-                cat("\n")
-              } else {
-                cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
-                           pkg_name, pkg_info$current, pkg_info$recommended))
-              }
-            }
-          }
-
-          # Report packages with higher version
-          if (length(packages_higher_version) > 0) {
-            cat("\n⚠ 以下包版本高于推荐版本：\n")
-            for (pkg_name in names(packages_higher_version)) {
-              pkg_info <- packages_higher_version[[pkg_name]]
               cat(sprintf("  - %s: 当前 %s，推荐 %s",
                          pkg_name, pkg_info$current, pkg_info$recommended))
               if (isTRUE(pkg_info$is_critical)) {
@@ -768,26 +622,34 @@ install_optional_packages <- function(optional_packages, interactive) {
               }
               cat("\n")
             }
-            cat("说明：高版本包可能存在兼容性风险\n")
-            cat("提示：如遇兼容性问题，可运行以下命令降级：\n")
-            for (pkg_name in names(packages_higher_version)) {
-              pkg_info <- packages_higher_version[[pkg_name]]
-              if (isTRUE(pkg_info$is_critical)) {
-                cat(sprintf("  remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)\n",
-                           pkg_name, pkg_info$recommended))
-              }
-            }
           }
 
-          # Report packages with unknown version
-          if (length(packages_unknown_version) > 0) {
-            cat("\n以下包版本无法判断，建议卸载后重新安装：\n")
-            for (pkg_name in names(packages_unknown_version)) {
-              pkg_info <- packages_unknown_version[[pkg_name]]
-              cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
-                         pkg_name, pkg_info$current, pkg_info$recommended))
+          # Report non-loaded packages with version mismatch
+          if (length(packages_version_mismatch) > 0) {
+            # Separate critical and non-critical
+            critical_mismatches <- names(packages_version_mismatch)[sapply(packages_version_mismatch, function(x) isTRUE(x$is_critical))]
+            non_critical_mismatches <- setdiff(names(packages_version_mismatch), critical_mismatches)
+
+            if (length(critical_mismatches) > 0) {
+              cat("\n⚠⚠⚠ 关键包版本不一致警告 ⚠⚠⚠\n")
+              cat("以下包使用其他版本可能存在兼容性风险，建议卸载后重新安装指定版本：\n")
+              for (pkg_name in critical_mismatches) {
+                pkg_info <- packages_version_mismatch[[pkg_name]]
+                cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
+                           pkg_name, pkg_info$current, pkg_info$recommended))
+                cat(sprintf("    卸载命令：remove.packages(\"%s\")\n", pkg_name))
+              }
             }
-            cat("使用 remove.packages(\"包名\") 卸载，然后重新运行安装\n")
+
+            if (length(non_critical_mismatches) > 0) {
+              cat("\nℹ 以下包版本与推荐版本不一致：\n")
+              for (pkg_name in non_critical_mismatches) {
+                pkg_info <- packages_version_mismatch[[pkg_name]]
+                cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
+                           pkg_name, pkg_info$current, pkg_info$recommended))
+              }
+              cat("提示：如遇兼容性问题，建议更新R包为推荐版本或联系客服\n")
+            }
           }
         } else {
           cat("未选择有效的功能包类别。\n")
@@ -814,26 +676,22 @@ generate_final_report <- function(package_defs, pkg_analysis) {
   cat("\n=== 环境检查和配置完成 ===\n")
 
   final_installed <- 0
-  final_outdated <- 0
   final_missing <- c()
 
   for (pkg_name in names(package_defs$essential_packages)) {
     if (requireNamespace(pkg_name, quietly = TRUE)) {
       final_installed <- final_installed + 1
-      current_version <- as.character(packageVersion(pkg_name))
-      recommended_version <- package_defs$essential_packages[[pkg_name]]
-      if (compareVersion(current_version, recommended_version) < 0) {
-        final_outdated <- final_outdated + 1
-      }
     } else {
       final_missing <- c(final_missing, pkg_name)
     }
   }
 
+  has_critical_mismatch <- length(pkg_analysis$critical_version_mismatch) > 0
+
   if (final_installed == length(package_defs$essential_packages)) {
     cat("常规包：全部已安装")
-    if (final_outdated > 0) {
-      cat(sprintf(" (其中 %d 个版本过低)", final_outdated))
+    if (has_critical_mismatch) {
+      cat(sprintf(" (其中 %d 个关键包版本不一致)", length(pkg_analysis$critical_version_mismatch)))
     }
     cat("\n")
   } else {
@@ -841,17 +699,19 @@ generate_final_report <- function(package_defs, pkg_analysis) {
     cat(sprintf("常规包：缺少 %d 个未安装\n", missing_count))
   }
 
-  if (final_installed == length(package_defs$essential_packages)) {
+  if (final_installed == length(package_defs$essential_packages) && !has_critical_mismatch) {
     cat("环境检查和配置完成！现在您可以：\n")
     cat("1. 开始使用已安装的R包进行分析\n")
     cat("2. 如需重新检查环境，运行 check_packages()\n")
-    if (final_outdated > 0) {
-      cat("3. 遇到问题及时咨询\n")
-    }
   } else {
-    cat("仍有部分包未安装，建议：\n")
-    cat("1. 检查网络连接后重新运行 check_packages()\n")
-    cat("2. 或手动安装缺失的包，遇到问题及时咨询\n")
+    cat("建议：\n")
+    if (length(final_missing) > 0) {
+      cat("1. 检查网络连接后重新运行 check_packages()\n")
+    }
+    if (has_critical_mismatch) {
+      cat("2. 按照上述提示卸载关键包，然后重新运行 check_packages() 安装指定版本\n")
+    }
+    cat("遇到问题及时咨询客服\n")
   }
 
   cat("\n")
@@ -859,7 +719,8 @@ generate_final_report <- function(package_defs, pkg_analysis) {
   return(list(
     installed = setdiff(names(package_defs$essential_packages), final_missing),
     missing = final_missing,
-    outdated = pkg_analysis$outdated_essential,
+    critical_version_mismatch = pkg_analysis$critical_version_mismatch,
+    version_mismatch_info = pkg_analysis$version_mismatch_info,
     total_packages = length(installed.packages()[,1])
   ))
 }

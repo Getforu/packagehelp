@@ -128,8 +128,25 @@ get_package_definitions <- function() {
   optional_packages <- list(
     "机器学习" = list(
       "xgboost" = "1.7.8.1",
-      "caret" = "6.0-94",
-      "glmnet" = "4.1-8"
+      "caret" = "6.0.94",
+      "glmnet" = "4.1.8",
+      "randomForest" = "4.7.1.1",
+      "gbm" = "2.2.2",
+      "lightgbm" = "4.6.0",
+      "catboost" = "1.2.7",
+      "rpart" = "4.1.23",
+      "adabag" = "5.0",
+      "ranger" = "0.15.1",
+      "e1071" = "1.7.13",
+      "nnet" = "7.3.19",
+      "kknn" = "1.4.1",
+      "ggsci" = "3.0.0",
+      "viridis" = "0.6.4",
+      "reshape2" = "1.4.4",
+      "ggradar" = "0.2",
+      "ggrepel" = "0.9.3",
+      "kernelshap" = "0.7.0",
+      "shapviz" = "0.9.7"
     ),
     "高级绘图" = list(
       "patchwork" = "1.1.2"

@@ -242,8 +242,8 @@ install_package_with_retry <- function(pkg_name, recommended_version, pkg_type =
 #' @return analysis
 #' @keywords internal
 analyze_package_status <- function(package_defs) {
-  # Define critical packages that need strict version control
-  critical_packages <- c("ggplot2", "dplyr", "tidyr", "rms")
+  # Define critical packages that need STRICT version control
+  critical_packages <- c("ggplot2", "rms")
 
   r_version <- getRversion()
   version_ok <- compareVersion(as.character(r_version), package_defs$min_r_version) >= 0
@@ -269,8 +269,8 @@ analyze_package_status <- function(package_defs) {
 
   installed_essential <- c()
   missing_essential <- c()
-  outdated_essential <- c()
-  higher_version_essential <- list()  # Store packages with higher versions
+  critical_version_mismatch <- list()  # Critical packages with version mismatch
+  version_mismatch_info <- list()      # Non-critical packages with version mismatch (info only)
 
   for (pkg_name in names(package_defs$essential_packages)) {
     recommended_version <- package_defs$essential_packages[[pkg_name]]
@@ -282,17 +282,21 @@ analyze_package_status <- function(package_defs) {
       current_version <- as.character(packageVersion(pkg_name))
       version_comparison <- compareVersion(current_version, recommended_version)
 
-      if (version_comparison < 0) {
-        # Lower version - needs update
-        outdated_essential <- c(outdated_essential, pkg_name)
-        installed_essential <- c(installed_essential, pkg_name)
-      } else if (version_comparison > 0) {
-        # Higher version - store for warning
-        higher_version_essential[[pkg_name]] <- list(
-          current = current_version,
-          recommended = recommended_version,
-          is_critical = pkg_name %in% critical_packages
-        )
+      if (version_comparison != 0) {
+        # Version mismatch detected
+        if (pkg_name %in% critical_packages) {
+          # Critical package: must match exactly
+          critical_version_mismatch[[pkg_name]] <- list(
+            current = current_version,
+            recommended = recommended_version
+          )
+        } else {
+          # Non-critical package: info only
+          version_mismatch_info[[pkg_name]] <- list(
+            current = current_version,
+            recommended = recommended_version
+          )
+        }
         installed_essential <- c(installed_essential, pkg_name)
       } else {
         # Exact match
@@ -301,45 +305,55 @@ analyze_package_status <- function(package_defs) {
     }
   }
 
-  if (length(missing_essential) == 0 && length(outdated_essential) == 0) {
+  if (length(missing_essential) == 0 && length(critical_version_mismatch) == 0) {
     cat("所有常规包已正确安装\n")
   } else {
     if (length(missing_essential) > 0) {
       cat(sprintf("缺少 %d 个包未安装\n", length(missing_essential)))
     }
 
-    if (length(outdated_essential) > 0) {
-      cat(sprintf("有 %d 个包版本过低\n", length(outdated_essential)))
+    if (length(critical_version_mismatch) > 0) {
+      cat(sprintf("有 %d 个关键包版本不一致（需要卸载重装）\n", length(critical_version_mismatch)))
     }
   }
 
-  # Display warning for higher version packages
-  if (length(higher_version_essential) > 0) {
-    cat(sprintf("\n⚠ 检测到 %d 个包版本高于推荐版本：\n", length(higher_version_essential)))
-    for (pkg_name in names(higher_version_essential)) {
-      pkg_info <- higher_version_essential[[pkg_name]]
-      cat(sprintf("  - %s: 当前 %s，推荐 %s",
-                  pkg_name, pkg_info$current, pkg_info$recommended))
-      if (pkg_info$is_critical) {
-        cat(" [关键包]")
-      }
-      cat("\n")
+  # Display CRITICAL version mismatch warning
+  if (length(critical_version_mismatch) > 0) {
+    cat(sprintf("\n⚠⚠⚠ 关键包版本不一致警告 ⚠⚠⚠\n"))
+    cat("以下包使用其他版本可能存在兼容性风险，建议卸载后重新安装指定版本：\n\n")
+    for (pkg_name in names(critical_version_mismatch)) {
+      pkg_info <- critical_version_mismatch[[pkg_name]]
+      cat(sprintf("【%s】\n", pkg_name))
+      cat(sprintf("  当前版本：%s\n", pkg_info$current))
+      cat(sprintf("  推荐版本：%s\n", pkg_info$recommended))
+      cat(sprintf("  卸载命令：remove.packages(\"%s\")\n", pkg_name))
     }
-    cat("说明：高版本包可能存在兼容性风险\n")
-    cat("提示：如遇兼容性问题，可在安装时选择降级到推荐版本\n")
+    cat("\n请先卸载上述包，然后重新运行 check_packages() 安装指定版本。\n")
+  }
+
+  # Display non-critical version mismatch info
+  if (length(version_mismatch_info) > 0) {
+    cat(sprintf("\nℹ 检测到 %d 个包版本与推荐版本不一致：\n", length(version_mismatch_info)))
+    for (pkg_name in names(version_mismatch_info)) {
+      pkg_info <- version_mismatch_info[[pkg_name]]
+      cat(sprintf("  - %s: 当前 %s，推荐 %s\n",
+                  pkg_name, pkg_info$current, pkg_info$recommended))
+    }
+    cat("提示：如遇兼容性问题，建议更新R包为推荐版本或联系客服\n")
   }
 
   cat("-----------------------------------\n")
 
-  packages_to_install <- c(missing_essential, outdated_essential)
+  # Only install missing packages (not version mismatches)
+  packages_to_install <- missing_essential
 
   return(list(
     version_ok = version_ok,
     base_missing = base_missing,
     installed_essential = installed_essential,
     missing_essential = missing_essential,
-    outdated_essential = outdated_essential,
-    higher_version_essential = higher_version_essential,  # Add to return
+    critical_version_mismatch = critical_version_mismatch,
+    version_mismatch_info = version_mismatch_info,
     packages_to_install = packages_to_install
   ))
 }
@@ -353,68 +367,22 @@ analyze_package_status <- function(package_defs) {
 install_essential_packages <- function(pkg_analysis, package_defs, interactive) {
   packages_to_install <- pkg_analysis$packages_to_install
   missing_essential <- pkg_analysis$missing_essential
-  outdated_essential <- pkg_analysis$outdated_essential
 
   # Determine package type based on OS for robust installation
   os_type <- Sys.info()["sysname"]
   pkg_type <- if(os_type == "Windows") "binary" else "both"
 
   if (length(packages_to_install) > 0) {
-    cat(sprintf("\n即将为您安装/更新 %d 个常规包\n", length(packages_to_install)))
-    if (length(missing_essential) > 0) {
-      cat(sprintf("- 缺失包：%d 个\n", length(missing_essential)))
-    }
-    if (length(outdated_essential) > 0) {
-      cat(sprintf("- 需更新包：%d 个\n", length(outdated_essential)))
-    }
+    cat(sprintf("\n即将为您安装 %d 个常规包\n", length(packages_to_install)))
     cat("这些包是使用R语言进行科研的基础, 且占用较小, 建议继续安装\n")
     cat(sprintf("安装路径：%s\n\n", .libPaths()[1]))
 
     if (interactive) {
-      choice <- readline("是否继续安装/更新？(Y/yes), 输入其他任意内容退出本程序: ")
+      choice <- readline("是否继续安装？(Y/yes), 输入其他任意内容退出本程序: ")
       if (tolower(choice) %in% c("y", "yes", "")) {
       } else {
         cat("安装已取消，程序已退出。\n")
         return(list(status = "cancelled"))
-      }
-    }
-
-    # Handle higher version packages if any
-    higher_version_essential <- pkg_analysis$higher_version_essential
-    downgrade_packages <- c()
-
-    if (interactive && length(higher_version_essential) > 0) {
-      critical_higher <- sapply(higher_version_essential, function(x) x$is_critical)
-      if (any(critical_higher)) {
-        cat("\n=== 版本兼容性确认 ===\n")
-        cat("检测到以下关键包版本高于推荐版本：\n\n")
-
-        for (pkg_name in names(higher_version_essential)[critical_higher]) {
-          pkg_info <- higher_version_essential[[pkg_name]]
-          cat(sprintf("【%s】\n", pkg_name))
-          cat(sprintf("  当前版本：%s\n", pkg_info$current))
-          cat(sprintf("  推荐版本：%s\n", pkg_info$recommended))
-          cat(sprintf("  说明：本包基于 %s %s 开发和测试，使用其他版本可能存在兼容性风险\n",
-                      pkg_name, pkg_info$recommended))
-          cat("\n")
-
-          choice <- readline(sprintf("是否将 %s 降级到推荐版本 %s？(Y/N): ",
-                                    pkg_name, pkg_info$recommended))
-          if (tolower(choice) %in% c("y", "yes")) {
-            downgrade_packages <- c(downgrade_packages, pkg_name)
-          } else {
-            cat(sprintf("已保留 %s 当前版本 %s\n", pkg_name, pkg_info$current))
-            cat(sprintf("  提示：如遇兼容性问题，可运行以下命令降级：\n"))
-            cat(sprintf("  remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)\n\n",
-                        pkg_name, pkg_info$recommended))
-          }
-        }
-      }
-
-      # Add downgrade packages to installation list
-      if (length(downgrade_packages) > 0) {
-        packages_to_install <- c(packages_to_install, downgrade_packages)
-        cat(sprintf("\n将降级 %d 个包到推荐版本\n", length(downgrade_packages)))
       }
     }
 
@@ -468,9 +436,6 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
 
         if (pkg_name %in% missing_essential) {
           missing_essential <- missing_essential[missing_essential != pkg_name]
-        }
-        if (pkg_name %in% outdated_essential) {
-          outdated_essential <- outdated_essential[outdated_essential != pkg_name]
         }
       } else {
         # Classify error with version info for manual command generation
@@ -541,8 +506,7 @@ install_essential_packages <- function(pkg_analysis, package_defs, interactive) 
       success_count = success_count,
       failed_packages = names(failed_packages),  # Return package names for compatibility
       failed_packages_details = failed_packages,  # Detailed error information
-      missing_essential = missing_essential,
-      outdated_essential = outdated_essential
+      missing_essential = missing_essential
     ))
   }
 

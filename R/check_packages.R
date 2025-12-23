@@ -39,15 +39,12 @@ check_packages <- function(interactive = TRUE, install_missing = TRUE) {
       return(invisible(list(
         installed = pkg_analysis$installed_essential,
         missing = pkg_analysis$missing_essential,
-        outdated = pkg_analysis$outdated_essential,
+        critical_version_mismatch = pkg_analysis$critical_version_mismatch,
         status = "cancelled"
       )))
     }
     if (!is.null(install_result$missing_essential)) {
       pkg_analysis$missing_essential <- install_result$missing_essential
-    }
-    if (!is.null(install_result$outdated_essential)) {
-      pkg_analysis$outdated_essential <- install_result$outdated_essential
     }
   }
 
