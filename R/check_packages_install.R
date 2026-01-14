@@ -20,7 +20,10 @@
 #' @return list with error type and suggestion
 #' @keywords internal
 classify_install_error <- function(error_msg, pkg_name = "", recommended_version = NULL) {
-  error_msg <- tolower(as.character(error_msg))
+  # 保留原始错误信息用于详细输出
+  error_msg_original <- as.character(error_msg)
+  # 小写版本用于模式匹配
+  error_msg <- tolower(error_msg_original)
 
   # Define large/problematic packages that benefit from remotes installation
   large_problematic_packages <- c("caret", "rmda", "xgboost", "arrow", "rJava", "sf", "terra", "keras", "tensorflow")
@@ -90,7 +93,7 @@ classify_install_error <- function(error_msg, pkg_name = "", recommended_version
       type = "unknown",
       type_cn = "未知错误",
       suggestion = suggestion,
-      detail = error_msg,
+      detail = error_msg_original,  # 使用原始错误信息（保留大小写）
       manual_command = if (!is.null(recommended_version) && pkg_name %in% large_problematic_packages)
         sprintf("remotes::install_version(\"%s\", version = \"%s\", dependencies = TRUE)", pkg_name, recommended_version) else NULL
     ))
@@ -106,7 +109,7 @@ classify_install_error <- function(error_msg, pkg_name = "", recommended_version
 #' @return list with installation result
 #' @keywords internal
 install_package_with_retry <- function(pkg_name, recommended_version, pkg_type = "binary",
-                                       max_retries = 3, timeout = NULL) {
+                                       max_retries = NULL, timeout = NULL) {
 
   # Unload package if currently loaded (prevent RStudio "Updating Loaded Packages" dialog)
   if (pkg_name %in% loadedNamespaces()) {
@@ -118,25 +121,31 @@ install_package_with_retry <- function(pkg_name, recommended_version, pkg_type =
       # Unload namespace
       unloadNamespace(pkg_name)
     }, error = function(e) {
-      # Silently continue if unload fails
+      # 记录警告但继续执行
+      warning(sprintf("无法卸载包 %s: %s (将继续尝试安装)", pkg_name, e$message), call. = FALSE)
     })
   }
 
+  # 包大小分类（用于 timeout 和 max_retries 的默认值）
+  large_packages <- c("arrow", "xgboost", "rJava", "sf", "rgdal", "terra", "keras", "tensorflow")
+  medium_packages <- c("ggplot2", "dplyr", "tidyr", "rms", "caret", "shiny", "plotly", "DynNom")
+
   # Determine timeout based on package size estimation
   if (is.null(timeout)) {
-    # Large packages that typically need more time
-    large_packages <- c("arrow", "xgboost", "rJava", "sf", "rgdal", "terra", "keras", "tensorflow")
-    # Medium packages
-    medium_packages <- c("ggplot2", "dplyr", "tidyr", "rms", "caret", "shiny", "plotly", "DynNom")
-
     if (pkg_name %in% large_packages) {
       timeout <- 600  # 10 minutes for large packages
-      max_retries <- 3
     } else if (pkg_name %in% medium_packages) {
       timeout <- 300  # 5 minutes for medium packages
-      max_retries <- 3
     } else {
       timeout <- 180  # 3 minutes for small packages
+    }
+  }
+
+  # 只在用户未指定 max_retries 时才根据包大小设置默认值
+  if (is.null(max_retries)) {
+    if (pkg_name %in% large_packages || pkg_name %in% medium_packages) {
+      max_retries <- 3
+    } else {
       max_retries <- 2
     }
   }

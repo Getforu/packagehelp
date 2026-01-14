@@ -21,9 +21,22 @@ persist_library_path <- function(lib_path) {
   success <- FALSE
   methods_tried <- c()
 
+  # 获取用户主目录（跨平台兼容）
+  get_user_home <- function() {
+    home <- Sys.getenv("HOME")
+    if (home == "" || !dir.exists(home)) {
+      home <- Sys.getenv("USERPROFILE")  # Windows 备选
+    }
+    if (home == "" || !dir.exists(home)) {
+      home <- path.expand("~")  # 最后备选
+    }
+    return(home)
+  }
+  user_home <- get_user_home()
+
   # Method 1: .Rprofile (most reliable, user-level)
   tryCatch({
-    rprofile_path <- file.path(Sys.getenv("HOME"), ".Rprofile")
+    rprofile_path <- file.path(user_home, ".Rprofile")
 
     # Read existing content
     existing_content <- if (file.exists(rprofile_path)) {
@@ -61,7 +74,7 @@ persist_library_path <- function(lib_path) {
   # Method 2: R_LIBS_USER environment variable (fallback)
   if (!success) {
     tryCatch({
-      renviron_path <- file.path(Sys.getenv("HOME"), ".Renviron")
+      renviron_path <- file.path(user_home, ".Renviron")
 
       existing_content <- if (file.exists(renviron_path)) {
         readLines(renviron_path, warn = FALSE)
@@ -80,7 +93,7 @@ persist_library_path <- function(lib_path) {
       success <- TRUE
       methods_tried <- c(methods_tried, ".Renviron")
     }, error = function(e) {
-      methods_tried <- c(methods_tried, ".Renviron (failed)")
+      methods_tried <<- c(methods_tried, ".Renviron (failed)")
     })
   }
 
@@ -98,7 +111,8 @@ generate_environment_report <- function(sys_config) {
   cat("=== R包环境检查报告 ===\n")
   sys_info <- Sys.info()
   r_version <- getRversion()
-  total_packages <- length(installed.packages()[,1])
+  # 使用 .packages() 替代 installed.packages()，性能更好
+  total_packages <- length(.packages(all.available = TRUE))
 
   cat(sprintf("系统信息：%s %s\n", sys_info["sysname"], sys_info["release"]))
   cat(sprintf("当前 R 版本：R %s\n", r_version))
@@ -193,14 +207,20 @@ handle_library_path_configuration <- function(interactive, sys_config) {
 
         if (!dir.exists(new_path)) {
           cat(sprintf("路径 %s 不存在，正在创建...\n", new_path))
-          tryCatch({
+          create_result <- tryCatch({
             dir.create(new_path, recursive = TRUE)
             cat("路径创建成功！\n")
+            TRUE  # 创建成功
           }, error = function(e) {
             cat(sprintf("路径创建失败：%s\n", e$message))
             cat("程序已退出。\n")
-            return(list(status = "cancelled", reason = "path_creation_failed"))
+            FALSE  # 创建失败
           })
+
+          # 如果路径创建失败，立即返回
+          if (!isTRUE(create_result)) {
+            return(list(status = "cancelled", reason = "path_creation_failed"))
+          }
         }
 
         if (!is.null(new_path) && dir.exists(new_path)) {
@@ -721,6 +741,6 @@ generate_final_report <- function(package_defs, pkg_analysis) {
     missing = final_missing,
     critical_version_mismatch = pkg_analysis$critical_version_mismatch,
     version_mismatch_info = pkg_analysis$version_mismatch_info,
-    total_packages = length(installed.packages()[,1])
+    total_packages = length(.packages(all.available = TRUE))
   ))
 }

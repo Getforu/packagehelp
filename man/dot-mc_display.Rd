@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_display}
 \alias{.mc_display}
-\title{Display machine code with formatting}
+\title{Display machine code}
 \usage{
 .mc_display(code)
 }
 \description{
-Display machine code with formatting
+Display machine code
 }
 \keyword{internal}

@@ -4,12 +4,14 @@
 \alias{check_package_version}
 \title{Check package version and compare with server}
 \usage{
-check_package_version(package_name, server_version)
+check_package_version(package_name, server_version, url = NULL)
 }
 \arguments{
 \item{package_name}{Package name}
 
 \item{server_version}{Server version from download info}
+
+\item{url}{Original URL for reinstall command}
 }
 \value{
 list with version comparison result

@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_get_quiet}
 \alias{.mc_get_quiet}
-\title{Internal function to get machine code quietly (for install_package use)}
+\title{Get machine code quietly}
 \usage{
 .mc_get_quiet()
 }
 \description{
-Internal function to get machine code quietly (for install_package use)
+Get machine code quietly
 }
 \keyword{internal}

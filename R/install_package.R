@@ -40,17 +40,26 @@ check_package_version <- function(package_name, server_version, url = NULL) {
     # Higher version detected - show warning but don't force downgrade
     warning_msg <- sprintf("⚠ 本地版本 %s 高于推荐版本 %s", local_version, server_version)
 
+    # 为所有情况提供明确的降级指引
+    uninstall_cmd <- sprintf('remove.packages("%s")', package_name)
+    reinstall_cmd <- if (!is.null(url)) {
+      sprintf('install_package("%s", force = TRUE)', url)
+    } else {
+      sprintf('install_package("<url>", force = TRUE)  # 请替换<url>为实际地址')
+    }
+
     if (package_name %in% critical_packages) {
-      reinstall_cmd <- if (!is.null(url)) {
-        sprintf('install_package("%s", force = TRUE)', url)
-      } else {
-        sprintf('install_package("<url>", force = TRUE)  # 请替换<url>为实际地址')
-      }
       warning_msg <- paste0(warning_msg,
                            sprintf("\n  说明：本包基于 %s %s 开发和测试，使用其他版本可能存在兼容性风险",
                                    package_name, server_version),
-                           sprintf("\n  提示：如遇兼容性问题，可使用以下命令降级到推荐版本：\n  %s",
-                                   reinstall_cmd))
+                           sprintf("\n  如需降级到推荐版本，请先卸载：%s", uninstall_cmd),
+                           sprintf("\n  然后重新安装：%s", reinstall_cmd))
+    } else {
+      # 非关键包也提供降级指引，但语气较轻
+      warning_msg <- paste0(warning_msg,
+                           "\n  通常高版本可正常使用，如遇兼容性问题：",
+                           sprintf("\n  先卸载：%s", uninstall_cmd),
+                           sprintf("\n  再安装：%s", reinstall_cmd))
     }
 
     return(list(
@@ -316,10 +325,11 @@ download_package_file <- function(download_url, os_type) {
   if (!download_success) {
     if (file.exists(temp_file)) file.remove(temp_file)
 
-    tryCatch({
-      old_method <- getOption("download.file.method")
-      old_ca_bundle <- Sys.getenv("CURL_CA_BUNDLE")
+    # 在 tryCatch 外部定义变量，确保 error handler 可以访问
+    old_method <- getOption("download.file.method")
+    old_ca_bundle <- Sys.getenv("CURL_CA_BUNDLE")
 
+    tryCatch({
       options(download.file.method = "libcurl")
       Sys.setenv(CURL_CA_BUNDLE = "")
 

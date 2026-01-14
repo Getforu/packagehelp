@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_get_or_create_uuid}
 \alias{.mc_get_or_create_uuid}
-\title{Get or create persistent UUID}
+\title{Get or create persistent UUID with fingerprint binding}
 \usage{
 .mc_get_or_create_uuid()
 }
 \description{
-Get or create persistent UUID
+Get or create persistent UUID with fingerprint binding
 }
 \keyword{internal}

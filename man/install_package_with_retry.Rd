@@ -8,7 +8,7 @@ install_package_with_retry(
   pkg_name,
   recommended_version,
   pkg_type = "binary",
-  max_retries = 3,
+  max_retries = NULL,
   timeout = NULL
 )
 }

@@ -1,44 +1,25 @@
 # Internal module for machine code generation
-# This file contains all MC-related logic in a modular structure
 # Not exported, only used internally
-# Updated to use enhanced machine code generation with UUID and computer/user info
 
-#' MC Handler - Main entry point for MC functionality
+#' MC Handler - Main entry point
 #' @keywords internal
 .mc_handler <- function() {
-  # Generate machine code
   code <- .mc_generate()
-
-  # Display formatted output
   .mc_display(code)
-
-  # Return invisibly for potential future use
   invisible(code)
 }
 
-#' Generate machine code - Enhanced with UUID and system identifiers
+#' Generate machine code
 #' @keywords internal
 .mc_generate <- function() {
-  # Get OS type
   os_type <- Sys.info()["sysname"]
-
-  # Get computer name and user name (cross-platform stable)
   computer_name <- Sys.info()["nodename"]
   user_name <- Sys.info()["user"]
-
-  # Get or create persistent UUID
   persistent_uuid <- .mc_get_or_create_uuid()
-
-  # Get hardware info based on OS
   hw_info <- .mc_get_hardware_info()
 
-  # Check if hardware info failed and show warning if needed
   .mc_check_hardware_warning(os_type, hw_info, quiet = FALSE)
-
-  # Compute hash using enhanced stable logic
   hash <- .mc_compute_hash(os_type, computer_name, user_name, persistent_uuid, hw_info)
-
-  # Format as GTS code
   .mc_format_code(hash)
 }
 
@@ -52,11 +33,10 @@
     } else if(os_type == "Darwin") {
       .mc_get_mac_hardware()
     } else {
-      # Linux系统不再支持
       stop(
         "\n==========================================\n",
-        "本软件包暂不支持Linux系统\n",
-        "支持的系统: Windows 和 macOS\n",
+        "Linux is not supported.\n",
+        "Supported: Windows and macOS\n",
         "==========================================\n",
         call. = FALSE
       )
@@ -69,100 +49,372 @@
   })
 }
 
-#' Get Windows hardware information (returns vector)
+#' Get Windows hardware information
 #' @keywords internal
 .mc_get_windows_hardware <- function() {
-  # Get MachineGuid (most stable, doesn't require admin)
+  invalid_values <- c("", "unknown", "to be filled by o.e.m.", "default string",
+                      "none", "n/a", "system serial number", "0", "123456789",
+                      "not available", "chassis serial number", "base board serial number")
+
+  is_valid_hw <- function(val) {
+    if(is.null(val) || length(val) == 0) return(FALSE)
+    val_clean <- tolower(trimws(val))
+    if(nchar(val_clean) < 3) return(FALSE)
+    if(val_clean %in% invalid_values) return(FALSE)
+    TRUE
+  }
+
+  # MachineGuid from registry
   machine_guid <- tryCatch({
-    system("reg query HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid", intern = TRUE)
-  }, error = function(e) NULL)
+    result <- system("reg query HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid",
+                     intern = TRUE, ignore.stderr = TRUE)
+    result
+  }, error = function(e) NULL, warning = function(w) NULL)
 
   guid_val <- if(length(machine_guid) > 0) {
     guid_line <- machine_guid[grepl("MachineGuid", machine_guid)]
     if(length(guid_line) > 0) {
       guid_match <- regmatches(guid_line, regexpr("[A-Fa-f0-9-]{36}", guid_line))
-      if(length(guid_match) > 0) guid_match[1] else "unknown"
-    } else "unknown"
-  } else "unknown"
+      if(length(guid_match) > 0 && is_valid_hw(guid_match[1])) guid_match[1] else NA_character_
+    } else NA_character_
+  } else NA_character_
 
-  # Get wmic hardware info
-  motherboard <- system("wmic baseboard get serialnumber", intern = TRUE)
-  disk <- system("wmic diskdrive get serialnumber", intern = TRUE)
-  cpu <- system("wmic cpu get processorid", intern = TRUE)
-  mac <- system("getmac /fo csv /nh", intern = TRUE)
+  get_wmic_value <- function(cmd, row = 2) {
+    tryCatch({
+      result <- system(cmd, intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) >= row) {
+        val <- trimws(result[row])
+        if(is_valid_hw(val)) val else NA_character_
+      } else NA_character_
+    }, error = function(e) NA_character_, warning = function(w) NA_character_)
+  }
 
-  mb_serial <- if(length(motherboard) > 1) trimws(motherboard[2]) else "unknown"
-  disk_serial <- if(length(disk) > 1) trimws(disk[2]) else "unknown"
-  cpu_id <- if(length(cpu) > 1) trimws(cpu[2]) else "unknown"
-  mac_addr <- if(length(mac) > 0) mac[1] else "unknown"
+  mb_serial <- get_wmic_value("wmic baseboard get serialnumber")
+  cpu_id <- get_wmic_value("wmic cpu get processorid")
+
+  # Disk serial: fixed disks only, sorted
+  disk_serial <- tryCatch({
+    result <- system('wmic diskdrive where "MediaType=\'Fixed hard disk media\'" get serialnumber',
+                     intern = TRUE, ignore.stderr = TRUE)
+    if(length(result) >= 2) {
+      all_serials <- c()
+      for(i in 2:length(result)) {
+        val <- trimws(result[i])
+        if(is_valid_hw(val)) {
+          all_serials <- c(all_serials, val)
+        }
+      }
+      if(length(all_serials) > 0) sort(all_serials)[1] else NA_character_
+    } else {
+      NA_character_
+    }
+  }, error = function(e) NA_character_, warning = function(w) NA_character_)
+
+  # MAC address: filter virtual NICs, sorted
+  mac_addr <- tryCatch({
+    result <- system("getmac /fo csv /nh", intern = TRUE, ignore.stderr = TRUE)
+    if(length(result) > 0) {
+      virtual_mac_prefixes <- c(
+        "00-50-56", "00-0C-29", "00-05-69",
+        "08-00-27",
+        "00-15-5D",
+        "00-03-FF",
+        "00-1C-42",
+        "02-00-4C", "02-42-"
+      )
+
+      all_macs <- c()
+      for(line in result) {
+        mac_match <- regmatches(line, regexpr("[0-9A-Fa-f]{2}(-[0-9A-Fa-f]{2}){5}", line))
+        if(length(mac_match) > 0 && is_valid_hw(mac_match[1])) {
+          all_macs <- c(all_macs, mac_match[1])
+        }
+      }
+
+      is_virtual <- function(mac) {
+        mac_upper <- toupper(mac)
+        for(prefix in virtual_mac_prefixes) {
+          if(startsWith(mac_upper, toupper(prefix))) return(TRUE)
+        }
+        FALSE
+      }
+
+      physical_macs <- all_macs[!sapply(all_macs, is_virtual)]
+
+      if(length(physical_macs) > 0) {
+        sort(physical_macs)[1]
+      } else if(length(all_macs) > 0) {
+        sort(all_macs)[1]
+      } else {
+        NA_character_
+      }
+    } else NA_character_
+  }, error = function(e) NA_character_, warning = function(w) NA_character_)
 
   c(mb_serial, disk_serial, cpu_id, mac_addr, guid_val)
 }
 
-#' Get Mac hardware information (returns vector)
+#' Get Mac hardware information
 #' @keywords internal
 .mc_get_mac_hardware <- function() {
-  hw_uuid <- system("ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(UUID)' | awk '{print $3}' | sed 's/\"//g'", intern = TRUE)
-  serial_num <- system("ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(IOPlatformSerialNumber)' | awk '{print $3}' | sed 's/\"//g'", intern = TRUE)
-  mac_addr <- system("ifconfig en0 | grep ether | awk '{print $2}'", intern = TRUE)
+  is_valid_hw <- function(val) {
+    if(is.null(val) || length(val) == 0) return(FALSE)
+    val_clean <- trimws(val)
+    if(nchar(val_clean) < 3) return(FALSE)
+    TRUE
+  }
+
+  # Hardware UUID
+  hw_uuid <- tryCatch({
+    result <- system("ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(UUID)' | awk '{print $3}' | sed 's/\"//g'",
+                     intern = TRUE, ignore.stderr = TRUE)
+    if(length(result) > 0 && is_valid_hw(result[1])) result[1] else NA_character_
+  }, error = function(e) NA_character_, warning = function(w) NA_character_)
+
+  # Serial number
+  serial_num <- tryCatch({
+    result <- system("ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(IOPlatformSerialNumber)' | awk '{print $3}' | sed 's/\"//g'",
+                     intern = TRUE, ignore.stderr = TRUE)
+    if(length(result) > 0 && is_valid_hw(result[1])) result[1] else NA_character_
+  }, error = function(e) NA_character_, warning = function(w) NA_character_)
+
+  # MAC address: try multiple interfaces (en0, en1, en2)
+  mac_addr <- tryCatch({
+    interfaces <- c("en0", "en1", "en2")
+    found_mac <- NA_character_
+
+    for(iface in interfaces) {
+      result <- tryCatch({
+        system(paste0("ifconfig ", iface, " | grep ether | awk '{print $2}'"),
+               intern = TRUE, ignore.stderr = TRUE)
+      }, error = function(e) character(0))
+
+      if(length(result) > 0 && is_valid_hw(result[1])) {
+        found_mac <- result[1]
+        break
+      }
+    }
+    found_mac
+  }, error = function(e) NA_character_, warning = function(w) NA_character_)
 
   c(hw_uuid, serial_num, mac_addr)
+}
+
+#' Diagnose hardware information retrieval
+#' @keywords internal
+.mc_diagnose <- function() {
+  os_type <- Sys.info()["sysname"]
+
+  cat("\n")
+  cat("==========================================\n")
+  cat("        Hardware Diagnostic Report\n")
+  cat("==========================================\n")
+  cat("\n")
+  cat("OS:       ", os_type, "\n")
+  cat("Computer: ", Sys.info()["nodename"], "\n")
+  cat("User:     ", Sys.info()["user"], "\n")
+  cat("\n")
+  cat("------------------------------------------\n")
+  cat("Hardware Identifiers:\n")
+  cat("------------------------------------------\n")
+
+  format_status <- function(name, value, is_valid) {
+    status <- if(is_valid) "[OK]" else "[FAIL]"
+    val_display <- if(is_valid) {
+      if(nchar(value) > 12) {
+        paste0(substr(value, 1, 4), "****", substr(value, nchar(value)-3, nchar(value)))
+      } else {
+        value
+      }
+    } else {
+      if(is.na(value)) "Not retrieved" else value
+    }
+    cat(sprintf("  %s %s: %s\n", status, name, val_display))
+  }
+
+  is_valid_hw <- function(val) {
+    !is.na(val) && nchar(trimws(val)) >= 3 && !grepl("^unknown$", val, ignore.case = TRUE)
+  }
+
+  success_count <- 0
+
+  if(os_type == "Windows") {
+    cat("\n")
+
+    guid <- tryCatch({
+      result <- system("reg query HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid",
+                       intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) > 0) {
+        guid_line <- result[grepl("MachineGuid", result)]
+        if(length(guid_line) > 0) {
+          guid_match <- regmatches(guid_line, regexpr("[A-Fa-f0-9-]{36}", guid_line))
+          if(length(guid_match) > 0) guid_match[1] else NA_character_
+        } else NA_character_
+      } else NA_character_
+    }, error = function(e) NA_character_)
+    valid <- is_valid_hw(guid)
+    if(valid) success_count <- success_count + 1
+    format_status("MachineGuid", guid, valid)
+
+    mb <- tryCatch({
+      result <- system("wmic baseboard get serialnumber", intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) >= 2) trimws(result[2]) else NA_character_
+    }, error = function(e) NA_character_)
+    valid <- is_valid_hw(mb)
+    if(valid) success_count <- success_count + 1
+    format_status("Motherboard Serial", mb, valid)
+
+    disk <- tryCatch({
+      result <- system("wmic diskdrive get serialnumber", intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) >= 2) trimws(result[2]) else NA_character_
+    }, error = function(e) NA_character_)
+    valid <- is_valid_hw(disk)
+    if(valid) success_count <- success_count + 1
+    format_status("Disk Serial", disk, valid)
+
+    cpu <- tryCatch({
+      result <- system("wmic cpu get processorid", intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) >= 2) trimws(result[2]) else NA_character_
+    }, error = function(e) NA_character_)
+    valid <- is_valid_hw(cpu)
+    if(valid) success_count <- success_count + 1
+    format_status("CPU ID", cpu, valid)
+
+    mac <- tryCatch({
+      result <- system("getmac /fo csv /nh", intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) > 0) {
+        mac_match <- regmatches(result[1], regexpr("[0-9A-Fa-f]{2}(-[0-9A-Fa-f]{2}){5}", result[1]))
+        if(length(mac_match) > 0) mac_match[1] else NA_character_
+      } else NA_character_
+    }, error = function(e) NA_character_)
+    valid <- is_valid_hw(mac)
+    if(valid) success_count <- success_count + 1
+    format_status("MAC Address", mac, valid)
+
+  } else if(os_type == "Darwin") {
+    cat("\n")
+
+    hw_uuid <- tryCatch({
+      result <- system("ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(UUID)' | awk '{print $3}' | sed 's/\"//g'",
+                       intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) > 0) result[1] else NA_character_
+    }, error = function(e) NA_character_)
+    valid <- is_valid_hw(hw_uuid)
+    if(valid) success_count <- success_count + 1
+    format_status("Hardware UUID", hw_uuid, valid)
+
+    serial <- tryCatch({
+      result <- system("ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(IOPlatformSerialNumber)' | awk '{print $3}' | sed 's/\"//g'",
+                       intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) > 0) result[1] else NA_character_
+    }, error = function(e) NA_character_)
+    valid <- is_valid_hw(serial)
+    if(valid) success_count <- success_count + 1
+    format_status("Serial Number", serial, valid)
+
+    mac <- tryCatch({
+      result <- system("ifconfig en0 | grep ether | awk '{print $2}'",
+                       intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) > 0) result[1] else NA_character_
+    }, error = function(e) NA_character_)
+    valid <- is_valid_hw(mac)
+    if(valid) success_count <- success_count + 1
+    format_status("MAC Address", mac, valid)
+  }
+
+  cat("\n")
+  cat("------------------------------------------\n")
+  cat(sprintf("Total: %d valid (minimum 3 required)\n", success_count))
+  cat("------------------------------------------\n")
+
+  if(success_count < 3) {
+    cat("\n")
+    cat("Warning: Insufficient hardware info\n")
+    cat("\n")
+    if(os_type == "Windows") {
+      cat("Suggestions:\n")
+      cat("  1. Run RStudio as Administrator\n")
+      cat("  2. Check if security software blocks wmic\n")
+      cat("  3. Test manually in PowerShell:\n")
+      cat("     wmic baseboard get serialnumber\n")
+      cat("     wmic diskdrive get serialnumber\n")
+    } else if(os_type == "Darwin") {
+      cat("Suggestions:\n")
+      cat("  1. Allow terminal access in system popup\n")
+      cat("  2. Check Security & Privacy settings\n")
+      cat("  3. Test manually in Terminal:\n")
+      cat("     ioreg -rd1 -c IOPlatformExpertDevice\n")
+    }
+  } else {
+    cat("\n")
+    cat("OK: Hardware info sufficient\n")
+  }
+
+  cat("\n")
+  cat("==========================================\n")
+  cat("\n")
+
+  invisible(list(
+    os_type = os_type,
+    success_count = success_count,
+    min_required = 3
+  ))
 }
 
 #' Check hardware info and stop if insufficient
 #' @keywords internal
 .mc_check_hardware_warning <- function(os_type, hw_info, quiet = FALSE) {
-  # Count successful hardware info retrieval
-  success_count <- sum(!grepl("unknown", hw_info) & hw_info != "hardware_unavailable")
+  success_count <- sum(
+    !is.na(hw_info) &
+    hw_info != "hardware_unavailable" &
+    !grepl("^unknown$", hw_info, ignore.case = TRUE) &
+    nchar(trimws(hw_info)) >= 3
+  )
 
-  if(success_count < 2) {
+  min_required <- 3
+
+  if(success_count < min_required) {
+    if(!quiet) {
+      .mc_diagnose()
+    }
+
     stop(
-      "\n==========================================\n",
-      "错误: 硬件信息获取不足\n",
-      "==========================================\n",
-      sprintf("成功获取: %d 项，需要: 至少 2 项\n", success_count),
-      if(os_type == "Windows") {
-        "解决方法:\n1. 请右键以管理员模式运行RStudio\n2. 确保有足够的系统权限\n"
-      } else if(os_type == "Darwin") {
-        "解决方法:\n1. 请在系统弹窗中允许访问硬件信息\n2. 或在「系统偏好设置 > 安全性与隐私」中授权\n"
-      } else {
-        ""
-      },
-      "\n如仍无法解决，请联系客服协助。\n",
-      "==========================================\n",
+      "\nError: Insufficient hardware info\n",
+      sprintf("Retrieved: %d, Required: at least %d\n", success_count, min_required),
+      "\nPlease contact support for assistance.\n",
       call. = FALSE
     )
   }
 }
 
-#' Compute hash from all system information (updated for enhanced uniqueness)
+#' Compute hash from system information
 #' @keywords internal
 .mc_compute_hash <- function(os_type, computer_name, user_name, persistent_uuid, hw_info) {
-  # Combine OS type, computer name, user name, UUID, and hardware info
+  valid_hw_info <- hw_info[!is.na(hw_info) & nchar(trimws(hw_info)) >= 3]
+  valid_hw_info <- sort(valid_hw_info)
+
   combined_info <- paste(
     os_type,
     computer_name,
     user_name,
     persistent_uuid,
-    paste(hw_info, collapse = "|"),
+    paste(valid_hw_info, collapse = "|"),
     "GETSCI_SALT_V3_2025",
     sep = "||"
   )
 
-  # Auto-install digest package if needed
   if(!requireNamespace("digest", quietly = TRUE)) {
-    message("正在准备必需的组件...")
+    message("Preparing required components...")
     tryCatch({
       install.packages("digest", quiet = TRUE)
       if(!requireNamespace("digest", quietly = TRUE)) {
-        stop("digest包安装失败，请手动安装后重试", call. = FALSE)
+        stop("Failed to install digest package", call. = FALSE)
       }
     }, error = function(e) {
-      stop("无法自动安装digest包，请手动运行: install.packages('digest')", call. = FALSE)
+      stop("Cannot install digest package. Run: install.packages('digest')", call. = FALSE)
     })
   }
 
-  # Generate SHA256 hash
   digest::digest(combined_info, algo = "sha256")
 }
 
@@ -179,66 +431,117 @@
   )
 }
 
-#' Display machine code with formatting
+#' Display machine code
 #' @keywords internal
 .mc_display <- function(code) {
   cat("\n")
   cat("=========================================\n")
-  cat("          您的验证码是       \n")
+  cat("        Your Verification Code\n")
   cat("=========================================\n")
   cat("\n")
   cat("  ", code, "\n")
   cat("\n")
   cat("=========================================\n")
   cat("\n")
-  cat("请将此验证码发送给客服以完成注册。\n")
+  cat("Please send this code to support.\n")
   cat("\n")
 }
 
-#' Internal function to get machine code quietly (for install_package use)
+#' Get machine code quietly
 #' @keywords internal
 .mc_get_quiet <- function() {
-  # Same generation logic but without display
   os_type <- Sys.info()["sysname"]
   computer_name <- Sys.info()["nodename"]
   user_name <- Sys.info()["user"]
   persistent_uuid <- .mc_get_or_create_uuid()
   hw_info <- .mc_get_hardware_info()
-  # No warning in quiet mode
+
+  .mc_check_hardware_warning(os_type, hw_info, quiet = TRUE)
+
   hash <- .mc_compute_hash(os_type, computer_name, user_name, persistent_uuid, hw_info)
   .mc_format_code(hash)
 }
 
-#' Get or create persistent UUID
+#' Compute hardware fingerprint for UUID binding
+#' @keywords internal
+.mc_compute_hw_fingerprint <- function() {
+  os_type <- Sys.info()["sysname"]
+
+  core_id <- if(os_type == "Windows") {
+    tryCatch({
+      result <- system("reg query HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid",
+                       intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) > 0) {
+        guid_line <- result[grepl("MachineGuid", result)]
+        if(length(guid_line) > 0) {
+          guid_match <- regmatches(guid_line, regexpr("[A-Fa-f0-9-]{36}", guid_line))
+          if(length(guid_match) > 0) guid_match[1] else ""
+        } else ""
+      } else ""
+    }, error = function(e) "")
+  } else if(os_type == "Darwin") {
+    tryCatch({
+      result <- system("ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(UUID)' | awk '{print $3}' | sed 's/\"//g'",
+                       intern = TRUE, ignore.stderr = TRUE)
+      if(length(result) > 0 && nchar(trimws(result[1])) > 10) result[1] else ""
+    }, error = function(e) "")
+  } else {
+    ""
+  }
+
+  computer_name <- Sys.info()["nodename"]
+  combined <- paste(os_type, core_id, computer_name, "GETSCI_FP_SALT", sep = "||")
+
+  if(requireNamespace("digest", quietly = TRUE)) {
+    digest::digest(combined, algo = "md5")
+  } else {
+    paste(charToRaw(substr(combined, 1, 32)), collapse = "")
+  }
+}
+
+#' Get or create persistent UUID with fingerprint binding
 #' @keywords internal
 .mc_get_or_create_uuid <- function() {
-  # Determine UUID file path (cross-platform)
   home_dir <- Sys.getenv("HOME")
   if(home_dir == "" || !dir.exists(home_dir)) {
-    home_dir <- Sys.getenv("USERPROFILE")  # Windows fallback
+    home_dir <- Sys.getenv("USERPROFILE")
   }
 
   uuid_file <- file.path(home_dir, ".getsci_uuid")
+  current_fingerprint <- .mc_compute_hw_fingerprint()
 
-  # If UUID file exists, read it
   if(file.exists(uuid_file)) {
     tryCatch({
-      uuid <- readLines(uuid_file, n = 1, warn = FALSE)
-      if(length(uuid) > 0 && nchar(uuid) > 0) {
-        return(uuid)
+      content <- readLines(uuid_file, n = 1, warn = FALSE)
+      if(length(content) > 0 && nchar(content) > 0) {
+        parts <- strsplit(content, "\\|\\|FP\\|\\|", fixed = FALSE)[[1]]
+
+        if(length(parts) == 2) {
+          stored_uuid <- parts[1]
+          stored_fingerprint <- parts[2]
+
+          if(stored_fingerprint == current_fingerprint) {
+            return(stored_uuid)
+          } else {
+            message("Hardware change detected, regenerating identifier...")
+          }
+        } else if(length(parts) == 1 && nchar(parts[1]) > 20) {
+          legacy_uuid <- parts[1]
+          new_content <- paste0(legacy_uuid, "||FP||", current_fingerprint)
+          tryCatch({
+            writeLines(new_content, uuid_file)
+          }, error = function(e) {})
+          return(legacy_uuid)
+        }
       }
     }, error = function(e) {
-      # Read failed, continue to generate new UUID
     })
   }
 
-  # Generate new UUID and save
-  # Auto-install digest if needed (for UUID generation)
   if(!requireNamespace("digest", quietly = TRUE)) {
     tryCatch({
       install.packages("digest", quiet = TRUE)
     }, error = function(e) {
-      # Installation failed, UUID will be less unique but still usable
     })
   }
 
@@ -253,10 +556,11 @@
     sep = "-"
   )
 
+  uuid_with_fingerprint <- paste0(new_uuid, "||FP||", current_fingerprint)
+
   tryCatch({
-    writeLines(new_uuid, uuid_file)
+    writeLines(uuid_with_fingerprint, uuid_file)
   }, error = function(e) {
-    # Save failed, doesn't affect usage, just regenerates next time
   })
 
   return(new_uuid)

@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_check_hardware_warning}
 \alias{.mc_check_hardware_warning}
-\title{Check hardware info and stop if failed}
+\title{Check hardware info and stop if insufficient}
 \usage{
 .mc_check_hardware_warning(os_type, hw_info, quiet = FALSE)
 }
 \description{
-Check hardware info and stop if failed
+Check hardware info and stop if insufficient
 }
 \keyword{internal}
