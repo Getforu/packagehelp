@@ -13,13 +13,11 @@
 #' @keywords internal
 .mc_generate <- function() {
   os_type <- Sys.info()["sysname"]
-  computer_name <- Sys.info()["nodename"]
-  user_name <- Sys.info()["user"]
   persistent_uuid <- .mc_get_or_create_uuid()
   hw_info <- .mc_get_hardware_info()
 
   .mc_check_hardware_warning(os_type, hw_info, quiet = FALSE)
-  hash <- .mc_compute_hash(os_type, computer_name, user_name, persistent_uuid, hw_info)
+  hash <- .mc_compute_hash(os_type, persistent_uuid, hw_info)
   .mc_format_code(hash)
 }
 
@@ -92,24 +90,6 @@
   mb_serial <- get_wmic_value("wmic baseboard get serialnumber")
   cpu_id <- get_wmic_value("wmic cpu get processorid")
 
-  # Disk serial: fixed disks only, sorted
-  disk_serial <- tryCatch({
-    result <- system('wmic diskdrive where "MediaType=\'Fixed hard disk media\'" get serialnumber',
-                     intern = TRUE, ignore.stderr = TRUE)
-    if(length(result) >= 2) {
-      all_serials <- c()
-      for(i in 2:length(result)) {
-        val <- trimws(result[i])
-        if(is_valid_hw(val)) {
-          all_serials <- c(all_serials, val)
-        }
-      }
-      if(length(all_serials) > 0) sort(all_serials)[1] else NA_character_
-    } else {
-      NA_character_
-    }
-  }, error = function(e) NA_character_, warning = function(w) NA_character_)
-
   # MAC address: filter virtual NICs, sorted
   mac_addr <- tryCatch({
     result <- system("getmac /fo csv /nh", intern = TRUE, ignore.stderr = TRUE)
@@ -151,7 +131,7 @@
     } else NA_character_
   }, error = function(e) NA_character_, warning = function(w) NA_character_)
 
-  c(mb_serial, disk_serial, cpu_id, mac_addr, guid_val)
+  c(mb_serial, cpu_id, mac_addr, guid_val)
 }
 
 #' Get Mac hardware information
@@ -264,14 +244,6 @@
     if(valid) success_count <- success_count + 1
     format_status("Motherboard Serial", mb, valid)
 
-    disk <- tryCatch({
-      result <- system("wmic diskdrive get serialnumber", intern = TRUE, ignore.stderr = TRUE)
-      if(length(result) >= 2) trimws(result[2]) else NA_character_
-    }, error = function(e) NA_character_)
-    valid <- is_valid_hw(disk)
-    if(valid) success_count <- success_count + 1
-    format_status("Disk Serial", disk, valid)
-
     cpu <- tryCatch({
       result <- system("wmic cpu get processorid", intern = TRUE, ignore.stderr = TRUE)
       if(length(result) >= 2) trimws(result[2]) else NA_character_
@@ -324,10 +296,10 @@
 
   cat("\n")
   cat("------------------------------------------\n")
-  cat(sprintf("Total: %d valid (minimum 3 required)\n", success_count))
+  cat(sprintf("Total: %d valid (minimum 2 required)\n", success_count))
   cat("------------------------------------------\n")
 
-  if(success_count < 3) {
+  if(success_count < 2) {
     cat("\n")
     cat("Warning: Insufficient hardware info\n")
     cat("\n")
@@ -337,7 +309,6 @@
       cat("  2. Check if security software blocks wmic\n")
       cat("  3. Test manually in PowerShell:\n")
       cat("     wmic baseboard get serialnumber\n")
-      cat("     wmic diskdrive get serialnumber\n")
     } else if(os_type == "Darwin") {
       cat("Suggestions:\n")
       cat("  1. Allow terminal access in system popup\n")
@@ -357,7 +328,7 @@
   invisible(list(
     os_type = os_type,
     success_count = success_count,
-    min_required = 3
+    min_required = 2
   ))
 }
 
@@ -371,7 +342,7 @@
     nchar(trimws(hw_info)) >= 3
   )
 
-  min_required <- 3
+  min_required <- 2
 
   if(success_count < min_required) {
     if(!quiet) {
@@ -389,14 +360,12 @@
 
 #' Compute hash from system information
 #' @keywords internal
-.mc_compute_hash <- function(os_type, computer_name, user_name, persistent_uuid, hw_info) {
+.mc_compute_hash <- function(os_type, persistent_uuid, hw_info) {
   valid_hw_info <- hw_info[!is.na(hw_info) & nchar(trimws(hw_info)) >= 3]
   valid_hw_info <- sort(valid_hw_info)
 
   combined_info <- paste(
     os_type,
-    computer_name,
-    user_name,
     persistent_uuid,
     paste(valid_hw_info, collapse = "|"),
     "GETSCI_SALT_V3_2025",
@@ -451,14 +420,12 @@
 #' @keywords internal
 .mc_get_quiet <- function() {
   os_type <- Sys.info()["sysname"]
-  computer_name <- Sys.info()["nodename"]
-  user_name <- Sys.info()["user"]
   persistent_uuid <- .mc_get_or_create_uuid()
   hw_info <- .mc_get_hardware_info()
 
   .mc_check_hardware_warning(os_type, hw_info, quiet = TRUE)
 
-  hash <- .mc_compute_hash(os_type, computer_name, user_name, persistent_uuid, hw_info)
+  hash <- .mc_compute_hash(os_type, persistent_uuid, hw_info)
   .mc_format_code(hash)
 }
 
@@ -489,8 +456,7 @@
     ""
   }
 
-  computer_name <- Sys.info()["nodename"]
-  combined <- paste(os_type, core_id, computer_name, "GETSCI_FP_SALT", sep = "||")
+  combined <- paste(os_type, core_id, "GETSCI_FP_SALT", sep = "||")
 
   if(requireNamespace("digest", quietly = TRUE)) {
     digest::digest(combined, algo = "md5")
