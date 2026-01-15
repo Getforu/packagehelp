@@ -87,9 +87,9 @@ get_package_definitions <- function() {
   base_packages <- c("base", "graphics", "grDevices", "grid", "stats", "utils","tools")
 
   essential_packages <- list(
-    "remotes" = "2.4.2",
+    "remotes" = "2.4.2.1",
     "bit64" = "4.0.5",
-    "digest" = "0.6.3.1",
+    "digest" = "0.6.31",
     "ggplot2" = "3.5.1",
     "gridExtra" = "2.3",
     "httr" = "1.4.7",
@@ -114,7 +114,7 @@ get_package_definitions <- function() {
     "pROC" = "1.18.5",
     "rlang" = "1.1.1",
     "rms" = "6.7-1",
-    "data.table" = "1.14.8",
+    "data.table" = "1.17.8",
     "rjson" = "0.2.21",
     "readr" = "2.1.4",
     "vroom" = "1.6.3",
