@@ -133,7 +133,6 @@ get_package_definitions <- function() {
       "randomForest" = "4.7.1.1",
       "gbm" = "2.2.2",
       "lightgbm" = "4.6.0",
-      "catboost" = "1.2.7",
       "rpart" = "4.1.23",
       "adabag" = "5.0",
       "ranger" = "0.15.1",
@@ -143,12 +142,11 @@ get_package_definitions <- function() {
       "ggsci" = "3.0.0",
       "viridis" = "0.6.4",
       "reshape2" = "1.4.4",
-      "ggradar" = "0.2",
       "ggrepel" = "0.9.3",
       "kernelshap" = "0.7.0",
       "shapviz" = "0.9.7"
     ),
-    "高级绘图" = list(
+    "高级绑图" = list(
       "patchwork" = "1.1.2"
     ),
     "预测模型" = list(
@@ -172,10 +170,25 @@ get_package_definitions <- function() {
     )
   )
 
+  # 特殊安装包：无法从CRAN直接安装，需要手动处理
+  special_packages <- list(
+    "catboost" = list(
+      version = "1.2.7",
+      description = "CatBoost包",
+      install_guide = "请根据教程或联系客服获取帮助"
+    ),
+    "ggradar" = list(
+      version = "0.2",
+      description = "雷达图包",
+      install_guide = "请根据教程或联系客服获取帮助"
+    )
+  )
+
   return(list(
     min_r_version = min_r_version,
     base_packages = base_packages,
     essential_packages = essential_packages,
-    optional_packages = optional_packages
+    optional_packages = optional_packages,
+    special_packages = special_packages
   ))
 }

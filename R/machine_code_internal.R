@@ -13,11 +13,22 @@
 #' @keywords internal
 .mc_generate <- function() {
   os_type <- Sys.info()["sysname"]
-  persistent_uuid <- .mc_get_or_create_uuid()
   hw_info <- .mc_get_hardware_info()
 
   .mc_check_hardware_warning(os_type, hw_info, quiet = FALSE)
-  hash <- .mc_compute_hash(os_type, persistent_uuid, hw_info)
+
+  # 检查是否存在旧的 UUID 文件（兼容模式）
+  uuid_file <- .mc_get_uuid_file_path()
+
+  if(file.exists(uuid_file)) {
+    # 旧用户：使用包含 UUID 的旧逻辑
+    persistent_uuid <- .mc_get_or_create_uuid()
+    hash <- .mc_compute_hash_legacy(os_type, persistent_uuid, hw_info)
+  } else {
+    # 新用户：使用纯硬件的新逻辑
+    hash <- .mc_compute_hash_v2(os_type, hw_info)
+  }
+
   .mc_format_code(hash)
 }
 
@@ -33,8 +44,8 @@
     } else {
       stop(
         "\n==========================================\n",
-        "Linux is not supported.\n",
-        "Supported: Windows and macOS\n",
+        "暂不支持Linux系统\n",
+        "支持的系统: Windows 和 macOS\n",
         "==========================================\n",
         call. = FALSE
       )
@@ -187,19 +198,19 @@
 
   cat("\n")
   cat("==========================================\n")
-  cat("        Hardware Diagnostic Report\n")
+  cat("           硬件诊断报告\n")
   cat("==========================================\n")
   cat("\n")
-  cat("OS:       ", os_type, "\n")
-  cat("Computer: ", Sys.info()["nodename"], "\n")
-  cat("User:     ", Sys.info()["user"], "\n")
+  cat("操作系统: ", os_type, "\n")
+  cat("计算机名: ", Sys.info()["nodename"], "\n")
+  cat("用户名:   ", Sys.info()["user"], "\n")
   cat("\n")
   cat("------------------------------------------\n")
-  cat("Hardware Identifiers:\n")
+  cat("硬件标识符:\n")
   cat("------------------------------------------\n")
 
   format_status <- function(name, value, is_valid) {
-    status <- if(is_valid) "[OK]" else "[FAIL]"
+    status <- if(is_valid) "[成功]" else "[失败]"
     val_display <- if(is_valid) {
       if(nchar(value) > 12) {
         paste0(substr(value, 1, 4), "****", substr(value, nchar(value)-3, nchar(value)))
@@ -207,7 +218,7 @@
         value
       }
     } else {
-      if(is.na(value)) "Not retrieved" else value
+      if(is.na(value)) "未获取" else value
     }
     cat(sprintf("  %s %s: %s\n", status, name, val_display))
   }
@@ -242,7 +253,7 @@
     }, error = function(e) NA_character_)
     valid <- is_valid_hw(mb)
     if(valid) success_count <- success_count + 1
-    format_status("Motherboard Serial", mb, valid)
+    format_status("主板序列号", mb, valid)
 
     cpu <- tryCatch({
       result <- system("wmic cpu get processorid", intern = TRUE, ignore.stderr = TRUE)
@@ -261,7 +272,7 @@
     }, error = function(e) NA_character_)
     valid <- is_valid_hw(mac)
     if(valid) success_count <- success_count + 1
-    format_status("MAC Address", mac, valid)
+    format_status("MAC地址", mac, valid)
 
   } else if(os_type == "Darwin") {
     cat("\n")
@@ -273,7 +284,7 @@
     }, error = function(e) NA_character_)
     valid <- is_valid_hw(hw_uuid)
     if(valid) success_count <- success_count + 1
-    format_status("Hardware UUID", hw_uuid, valid)
+    format_status("硬件UUID", hw_uuid, valid)
 
     serial <- tryCatch({
       result <- system("ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(IOPlatformSerialNumber)' | awk '{print $3}' | sed 's/\"//g'",
@@ -282,7 +293,7 @@
     }, error = function(e) NA_character_)
     valid <- is_valid_hw(serial)
     if(valid) success_count <- success_count + 1
-    format_status("Serial Number", serial, valid)
+    format_status("序列号", serial, valid)
 
     mac <- tryCatch({
       result <- system("ifconfig en0 | grep ether | awk '{print $2}'",
@@ -291,34 +302,34 @@
     }, error = function(e) NA_character_)
     valid <- is_valid_hw(mac)
     if(valid) success_count <- success_count + 1
-    format_status("MAC Address", mac, valid)
+    format_status("MAC地址", mac, valid)
   }
 
   cat("\n")
   cat("------------------------------------------\n")
-  cat(sprintf("Total: %d valid (minimum 2 required)\n", success_count))
+  cat(sprintf("合计: %d 个有效 (最少需要 2 个)\n", success_count))
   cat("------------------------------------------\n")
 
   if(success_count < 2) {
     cat("\n")
-    cat("Warning: Insufficient hardware info\n")
+    cat("警告: 硬件信息不足\n")
     cat("\n")
     if(os_type == "Windows") {
-      cat("Suggestions:\n")
-      cat("  1. Run RStudio as Administrator\n")
-      cat("  2. Check if security software blocks wmic\n")
-      cat("  3. Test manually in PowerShell:\n")
+      cat("建议:\n")
+      cat("  1. 以管理员身份运行RStudio\n")
+      cat("  2. 检查安全软件是否阻止wmic命令\n")
+      cat("  3. 在PowerShell中手动测试:\n")
       cat("     wmic baseboard get serialnumber\n")
     } else if(os_type == "Darwin") {
-      cat("Suggestions:\n")
-      cat("  1. Allow terminal access in system popup\n")
-      cat("  2. Check Security & Privacy settings\n")
-      cat("  3. Test manually in Terminal:\n")
+      cat("建议:\n")
+      cat("  1. 在系统弹窗中允许终端访问\n")
+      cat("  2. 检查「系统偏好设置 > 安全性与隐私」\n")
+      cat("  3. 在终端中手动测试:\n")
       cat("     ioreg -rd1 -c IOPlatformExpertDevice\n")
     }
   } else {
     cat("\n")
-    cat("OK: Hardware info sufficient\n")
+    cat("正常: 硬件信息充足\n")
   }
 
   cat("\n")
@@ -350,17 +361,17 @@
     }
 
     stop(
-      "\nError: Insufficient hardware info\n",
-      sprintf("Retrieved: %d, Required: at least %d\n", success_count, min_required),
-      "\nPlease contact support for assistance.\n",
+      "\n错误: 硬件信息不足\n",
+      sprintf("获取到: %d 个, 需要: 至少 %d 个\n", success_count, min_required),
+      "\n请联系客服协助解决。\n",
       call. = FALSE
     )
   }
 }
 
-#' Compute hash from system information
+#' Compute hash from system information (legacy mode with UUID)
 #' @keywords internal
-.mc_compute_hash <- function(os_type, persistent_uuid, hw_info) {
+.mc_compute_hash_legacy <- function(os_type, persistent_uuid, hw_info) {
   valid_hw_info <- hw_info[!is.na(hw_info) & nchar(trimws(hw_info)) >= 3]
   valid_hw_info <- sort(valid_hw_info)
 
@@ -373,14 +384,42 @@
   )
 
   if(!requireNamespace("digest", quietly = TRUE)) {
-    message("Preparing required components...")
+    message("正在准备必要组件...")
     tryCatch({
       install.packages("digest", quiet = TRUE)
       if(!requireNamespace("digest", quietly = TRUE)) {
-        stop("Failed to install digest package", call. = FALSE)
+        stop("无法安装digest包", call. = FALSE)
       }
     }, error = function(e) {
-      stop("Cannot install digest package. Run: install.packages('digest')", call. = FALSE)
+      stop("无法安装digest包，请手动运行: install.packages('digest')", call. = FALSE)
+    })
+  }
+
+  digest::digest(combined_info, algo = "sha256")
+}
+
+#' Compute hash from hardware only (new mode without UUID)
+#' @keywords internal
+.mc_compute_hash_v2 <- function(os_type, hw_info) {
+  valid_hw_info <- hw_info[!is.na(hw_info) & nchar(trimws(hw_info)) >= 3]
+  valid_hw_info <- sort(valid_hw_info)
+
+  combined_info <- paste(
+    os_type,
+    paste(valid_hw_info, collapse = "|"),
+    "GETSCI_SALT_V3_2026",
+    sep = "||"
+  )
+
+  if(!requireNamespace("digest", quietly = TRUE)) {
+    message("正在准备必要组件...")
+    tryCatch({
+      install.packages("digest", quiet = TRUE)
+      if(!requireNamespace("digest", quietly = TRUE)) {
+        stop("无法安装digest包", call. = FALSE)
+      }
+    }, error = function(e) {
+      stop("无法安装digest包，请手动运行: install.packages('digest')", call. = FALSE)
     })
   }
 
@@ -405,14 +444,14 @@
 .mc_display <- function(code) {
   cat("\n")
   cat("=========================================\n")
-  cat("        Your Verification Code\n")
+  cat("           您的验证码\n")
   cat("=========================================\n")
   cat("\n")
   cat("  ", code, "\n")
   cat("\n")
   cat("=========================================\n")
   cat("\n")
-  cat("Please send this code to support.\n")
+  cat("请将此验证码发送给客服激活授权。\n")
   cat("\n")
 }
 
@@ -420,12 +459,22 @@
 #' @keywords internal
 .mc_get_quiet <- function() {
   os_type <- Sys.info()["sysname"]
-  persistent_uuid <- .mc_get_or_create_uuid()
   hw_info <- .mc_get_hardware_info()
 
   .mc_check_hardware_warning(os_type, hw_info, quiet = TRUE)
 
-  hash <- .mc_compute_hash(os_type, persistent_uuid, hw_info)
+  # 检查是否存在旧的 UUID 文件（兼容模式）
+  uuid_file <- .mc_get_uuid_file_path()
+
+  if(file.exists(uuid_file)) {
+    # 旧用户：使用包含 UUID 的旧逻辑
+    persistent_uuid <- .mc_get_or_create_uuid()
+    hash <- .mc_compute_hash_legacy(os_type, persistent_uuid, hw_info)
+  } else {
+    # 新用户：使用纯硬件的新逻辑
+    hash <- .mc_compute_hash_v2(os_type, hw_info)
+  }
+
   .mc_format_code(hash)
 }
 
@@ -465,6 +514,16 @@
   }
 }
 
+#' Get UUID file path
+#' @keywords internal
+.mc_get_uuid_file_path <- function() {
+  home_dir <- Sys.getenv("HOME")
+  if(home_dir == "" || !dir.exists(home_dir)) {
+    home_dir <- Sys.getenv("USERPROFILE")
+  }
+  file.path(home_dir, ".getsci_uuid")
+}
+
 #' Get or create persistent UUID with fingerprint binding
 #' @keywords internal
 .mc_get_or_create_uuid <- function() {
@@ -489,7 +548,7 @@
           if(stored_fingerprint == current_fingerprint) {
             return(stored_uuid)
           } else {
-            message("Hardware change detected, regenerating identifier...")
+            message("检测到硬件变化，正在重新生成标识符...")
           }
         } else if(length(parts) == 1 && nchar(parts[1]) > 20) {
           legacy_uuid <- parts[1]

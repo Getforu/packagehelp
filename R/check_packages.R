@@ -52,7 +52,62 @@ check_packages <- function(interactive = TRUE, install_missing = TRUE) {
     install_optional_packages(package_defs$optional_packages, interactive)
   }
 
+  # 检查特殊安装包
+  if (interactive && !is.null(package_defs$special_packages)) {
+    check_special_packages(package_defs$special_packages)
+  }
+
   final_result <- generate_final_report(package_defs, pkg_analysis)
 
   return(invisible(final_result))
+}
+
+#' Check special packages that cannot be installed from CRAN
+#' @param special_packages list of special packages
+#' @keywords internal
+check_special_packages <- function(special_packages) {
+  if (length(special_packages) == 0) return(invisible(NULL))
+
+  missing_special <- c()
+  installed_special <- c()
+
+  for (pkg_name in names(special_packages)) {
+    if (requireNamespace(pkg_name, quietly = TRUE)) {
+      installed_special <- c(installed_special, pkg_name)
+    } else {
+      missing_special <- c(missing_special, pkg_name)
+    }
+  }
+
+  if (length(missing_special) > 0) {
+    cat("\n")
+    cat("===========================================\n")
+    cat("        特殊安装包检查\n")
+    cat("===========================================\n")
+    cat("\n")
+    cat(sprintf("检测到 %d 个特殊包未安装:\n", length(missing_special)))
+    cat("这些包无法从CRAN直接安装，需要手动处理。\n\n")
+
+    for (pkg_name in missing_special) {
+      pkg_info <- special_packages[[pkg_name]]
+      cat(sprintf("【%s】%s\n", pkg_name, pkg_info$description))
+      cat(sprintf("  推荐版本: %s\n", pkg_info$version))
+      cat(sprintf("  安装指南: %s\n", pkg_info$install_guide))
+      cat("\n")
+    }
+
+    cat("-------------------------------------------\n")
+    cat("提示: 如需使用这些包的相关功能，请按照上述指南手动安装，\n")
+    cat("      或联系客服获取帮助。\n")
+    cat("===========================================\n")
+  }
+
+  if (length(installed_special) > 0) {
+    cat(sprintf("\n已安装的特殊包: %s\n", paste(installed_special, collapse = ", ")))
+  }
+
+  invisible(list(
+    installed = installed_special,
+    missing = missing_special
+  ))
 }
