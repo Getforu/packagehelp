@@ -2,11 +2,11 @@
 % Please edit documentation in R/machine_code_internal.R
 \name{.mc_format_code}
 \alias{.mc_format_code}
-\title{Format hash as GTS code}
+\title{Format hash as machine code with OS-specific prefix}
 \usage{
-.mc_format_code(hash)
+.mc_format_code(os_type, hash)
 }
 \description{
-Format hash as GTS code
+Format hash as machine code with OS-specific prefix
 }
 \keyword{internal}
