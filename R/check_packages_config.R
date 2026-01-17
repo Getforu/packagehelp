@@ -135,10 +135,10 @@ get_package_definitions <- function() {
       "rmda" = "1.6",
       "ResourceSelection" = "0.3-6",
       "classInt" = "0.4-11",
-      "corrplot" = "0.92",
+      "corrplot" = "0.95",
       "scales" = "1.3.0",
       "htmltools" = "0.5.5",
-      "writexl" = "1.4.2",
+      "writexl" = "1.5.4",
       "DynNom" = "5.1",
       "shiny" = "1.7.5",
       "bslib" = "0.5.1",
@@ -166,7 +166,7 @@ get_package_definitions <- function() {
       "shapviz" = "0.9.7"
     ),
     "高级绘图" = list(
-      "patchwork" = "1.1.2"
+      "patchwork" = "1.1.3"
     )
   )
 

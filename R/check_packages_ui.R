@@ -491,7 +491,7 @@ install_optional_packages <- function(optional_packages, special_packages, pkg_t
 
       # Report loaded packages with version mismatch
       if (length(packages_loaded) > 0) {
-        cat("\n以下包已加载，版本不一致（需重启R后处理）：\n")
+        cat("\n以下包已加载，版本不一致（非强制更改，可遇到问题后再处理）：\n")
         for (pkg_name in names(packages_loaded)) {
           pkg_info <- packages_loaded[[pkg_name]]
           cat(sprintf("  - %s: 当前 %s，推荐 %s",
@@ -656,7 +656,7 @@ install_optional_packages <- function(optional_packages, special_packages, pkg_t
 
           # Report loaded packages with version mismatch
           if (length(packages_loaded) > 0) {
-            cat("\n以下包已加载，版本不一致（需重启R后处理）：\n")
+            cat("\n以下包已加载，版本不一致（非强制更改，可遇到问题后再处理）：\n")
             for (pkg_name in names(packages_loaded)) {
               pkg_info <- packages_loaded[[pkg_name]]
               cat(sprintf("  - %s: 当前 %s，推荐 %s",
