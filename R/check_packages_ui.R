@@ -265,10 +265,10 @@ handle_library_path_configuration <- function(interactive, sys_config) {
 #' @param interactive interactive mode
 #' @return results
 #' @keywords internal
-install_optional_packages <- function(optional_packages, interactive) {
+install_optional_packages <- function(optional_packages, special_packages, pkg_type_override = NULL, interactive = TRUE) {
   # Determine package type based on OS for robust installation
   os_type <- Sys.info()["sysname"]
-  pkg_type <- if(os_type == "Windows") "binary" else "both"
+  pkg_type <- if(!is.null(pkg_type_override)) pkg_type_override else if(os_type == "Windows") "binary" else "both"
 
   # Helper function to check package status
   check_package_status <- function(pkg_name, recommended_version) {
@@ -347,12 +347,36 @@ install_optional_packages <- function(optional_packages, interactive) {
       cat(sprintf("%d. %s (%d个包)\n", i, names(optional_packages)[i], pkg_count))
     }
 
-    cat("\n选择安装方式：\n")
-    cat("A. 全部安装 (推荐)\n")
-    cat("B. 自定义选择\n")
-    cat("C. 暂不安装\n\n")
+    # 显示特殊安装包选项
+    special_pkg_count <- length(names(special_packages))
+    cat(sprintf("%d. 特殊安装包 (%d个包) - 需手动安装\n", length(optional_packages) + 1, special_pkg_count))
 
-    choice <- readline("请输入选择 (A/B/C): ")
+    cat("\n选择安装方式：\n")
+    cat("A. 全部安装 (推荐，不含特殊包)\n")
+    cat("B. 自定义选择\n")
+    cat("C. 暂不安装\n")
+    cat("D. 查看特殊安装包说明\n\n")
+
+    choice <- readline("请输入选择 (A/B/C/D): ")
+
+    # 处理特殊安装包说明
+    if (toupper(choice) == "D") {
+      cat("\n=== 特殊安装包说明 ===\n")
+      cat("以下包无法从CRAN直接安装，需要手动处理：\n\n")
+      for (pkg_name in names(special_packages)) {
+        pkg_info <- special_packages[[pkg_name]]
+        cat(sprintf("【%s】%s\n", pkg_name, pkg_info$description))
+        cat(sprintf("  推荐版本: %s\n", pkg_info$version))
+        cat(sprintf("  安装方法: %s\n\n", pkg_info$install_guide))
+      }
+      cat("-----------------------------------\n")
+      cat("如需安装以上包，请按照说明操作或联系客服。\n\n")
+
+      # 返回主菜单
+      cat("按回车键继续...\n")
+      readline()
+      return(install_optional_packages(optional_packages, special_packages, pkg_type, interactive))
+    }
 
     if (toupper(choice) == "A") {
       # Flatten the nested list and remove category prefixes from names

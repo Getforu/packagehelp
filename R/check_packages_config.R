@@ -126,6 +126,25 @@ get_package_definitions <- function() {
   )
 
   optional_packages <- list(
+    "预测模型" = list(
+      "MASS" = "7.3-60.2",
+      "Hmisc" = "5.1-0",
+      "Boruta" = "8.0.0",
+      "smotefamily" = "1.4.0",
+      "dcurves" = "0.5.0",
+      "rmda" = "1.6",
+      "ResourceSelection" = "0.3-6",
+      "classInt" = "0.4-11",
+      "corrplot" = "0.92",
+      "scales" = "1.3.0",
+      "htmltools" = "0.5.5",
+      "writexl" = "1.4.2",
+      "DynNom" = "5.1",
+      "shiny" = "1.7.5",
+      "bslib" = "0.5.1",
+      "shinyWidgets" = "0.9.0",
+      "plotly" = "4.10.2"
+    ),
     "机器学习" = list(
       "xgboost" = "1.7.8.1",
       "caret" = "6.0.94",
@@ -146,27 +165,8 @@ get_package_definitions <- function() {
       "kernelshap" = "0.7.0",
       "shapviz" = "0.9.7"
     ),
-    "高级绑图" = list(
+    "高级绘图" = list(
       "patchwork" = "1.1.2"
-    ),
-    "预测模型" = list(
-      "MASS" = "7.3-60.2",
-      "Hmisc" = "5.1-0",
-      "Boruta" = "8.0.0",
-      "smotefamily" = "1.4.0",
-      "dcurves" = "0.5.0",
-      "rmda" = "1.6",
-      "ResourceSelection" = "0.3-6",
-      "classInt" = "0.4-11",
-      "corrplot" = "0.92",
-      "scales" = "1.3.0",
-      "htmltools" = "0.5.5",
-      "writexl" = "1.4.2",
-      "DynNom" = "5.1",
-      "shiny" = "1.7.5",
-      "bslib" = "0.5.1",
-      "shinyWidgets" = "0.9.0",
-      "plotly" = "4.10.2"
     )
   )
 

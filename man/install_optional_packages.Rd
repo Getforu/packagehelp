@@ -4,7 +4,12 @@
 \alias{install_optional_packages}
 \title{Install optional packages}
 \usage{
-install_optional_packages(optional_packages, interactive)
+install_optional_packages(
+  optional_packages,
+  special_packages,
+  pkg_type_override = NULL,
+  interactive = TRUE
+)
 }
 \arguments{
 \item{optional_packages}{optional}

@@ -49,12 +49,7 @@ check_packages <- function(interactive = TRUE, install_missing = TRUE) {
   }
 
   if (interactive && length(pkg_analysis$missing_essential) == 0) {
-    install_optional_packages(package_defs$optional_packages, interactive)
-  }
-
-  # 检查特殊安装包
-  if (interactive && !is.null(package_defs$special_packages)) {
-    check_special_packages(package_defs$special_packages)
+    install_optional_packages(package_defs$optional_packages, package_defs$special_packages, interactive = interactive)
   }
 
   final_result <- generate_final_report(package_defs, pkg_analysis)
